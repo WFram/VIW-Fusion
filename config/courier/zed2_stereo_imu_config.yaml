@@ -1,0 +1,184 @@
+%YAML:1.0
+
+#common parameters
+#support: 1 imu 1 cam; 1 imu 2 cam: 2 cam;
+# TODO: check calibration params. When we use both IMU and wheels, the visualized frame is wrongly rotated. Not the
+#         case for single VIO/VWO setup
+imu: 1
+wheel: 1
+only_initial_with_wheel: 0  # Whether to use only wheels for initialization (no factor graph aided)
+plane: 1
+num_of_cam: 1
+
+imu_topic: "/zed2/zed_node/imu/data"
+wheel_topic: "/odom_200"
+# TODO check the distortion
+image0_topic: "/zed2/zed_node/left/image_rect_color"
+image1_topic: "/zed2/zed_node/right/image_rect_color"
+output_path: "/home/wfram/viw_fusion_ws/src/VIW-Fusion/output"
+
+cam0_calib: "zed2_left.yaml"
+cam1_calib: "zed2_right.yaml"
+image_width: 1280
+image_height: 720
+   
+
+# Extrinsic parameter between IMU and Camera. # WF
+estimate_extrinsic: 0   # 0  Have an accurate extrinsic parameters. We will trust the following imu^R_cam, imu^T_cam, don't change it.
+  # 1  Have an initial guess about extrinsic parameters. We will optimize around your initial guess.
+# 2  Don't know anything about extrinsic parameters. You don't need to give R,T. We will try to calibrate it. Do some rotation movement at beginning.
+#If you choose 0 or 1, you should write down the following matrix.
+
+extrinsic_type: 0 # 0 ALL
+                  # 1 Only translation
+                  # 2 Only Rotation
+                  # 3 no z
+                  # 4 no rotation and no z
+
+body_T_cam0: !!opencv-matrix
+   rows: 4
+   cols: 4
+   dt: d
+#   data: [0.03758758, 0.0190846, 0.99911108, -0.01088468,
+#          -0.99906439, -0.02068303, 0.0379809, -0.00641469,
+#          0.02138949, -0.99960392, 0.01828932, 0.02625376,
+#          0., 0., 0., 1. ]
+
+   data: [ 0.0000000, 0.0000000, 1.0000000, 0.,
+           -1.0000000, 0.0000000, 0.0000000, 0.,
+           0.0000000, -1.0000000, 0.0000000, 0.,
+           0., 0., 0., 1 ]
+
+  #  0.03758758	  0.0190846	0.99911108	-0.01088468
+  #  -0.99906439	-0.02068303	 0.0379809	-0.00641469
+  #  0.02138949	-0.99960392	0.01828932	 0.02625376
+  #  0.0	        0.0	       0.0	        1.0
+
+  #  -0.00559079 -0.0147824 0.999875 0.250328
+  #  -0.999981 0.00248228 -0.00555469 0.0505236
+  #  -0.00239986 -0.999888 -0.014796 0.597516
+  #  0.0 0.0 0.0 1.0
+
+  #  -0.0055908 -0.9999820 -0.0023999 0.0533562
+  #  -0.0147824 0.0024823 -0.9998873 0.6010237
+  #  0.9998752 -0.0055547 -0.0147960 -0.2411753
+  #  0.0 0.0 0.0 1.0
+
+body_T_cam1: !!opencv-matrix
+   rows: 4
+   cols: 4
+   dt: d
+   data: [0.0375876, 0.0190846, 0.9991111, -0.0063742,
+          -0.9990644, -0.0206830, 0.0379809, -0.1263024,
+          0.0213895, -0.9996039, 0.0182893, 0.0288205,
+          0., 0., 0., 1.]
+
+
+# Extrinsic parameter between IMU and Wheel.
+estimate_wheel_extrinsic: 0   # 0  Have an accurate extrinsic parameters. We will trust the following imu^R_cam, imu^T_cam, don't change it.
+# 1  Have an initial guess about extrinsic parameters. We will optimize around your initial guess.
+# 2  Don't know anything about extrinsic parameters. You don't need to give R,T. We will try to calibrate it. Do some rotation movement at beginning.
+#If you choose 0 or 1, you should write down the following matrix.
+
+extrinsic_type_wheel: 0 # 0 ALL
+                        # 1 Only translation
+                        # 2 Only Rotation
+                        # 3 no z
+                        # 4 no rotation and no z
+
+#wheel to body
+body_T_wheel: !!opencv-matrix
+  rows: 4
+  cols: 4
+  dt: d
+#  data: [0.9984941, -0.0430893, -0.0339555, -0.2383698,
+#         0.0438675, 0.9987841, 0.0225164, -0.0813120,
+#         0.0329440, -0.0239720, 0.9991693, -0.5778016,
+#         0., 0., 0., 1]
+  data: [ 1.0000000, 0.0000000, 0.0000000, 0.,
+          0.0000000, 1.0000000, 0.0000000, 0.,
+          0.0000000, 0.0000000, 1.0000000, 0.,
+          0., 0., 0., 1 ]
+  #  data: [-0.0216921, -0.9995074, 0.0226940, 0.5964736,
+  #         0.0261770, -0.0232594, -0.9993866, -0.2348593,
+  #         0.9994215, -0.0210848, 0.0266687, -0.0079673,
+  #         0., 0., 0., 1.]
+  #  data: [-0.0216921, -0.9995074, 0.0226940, 0.4764736,
+  #         0.0261770, -0.0232594, -0.9993866, -0.2348593,
+  #         0.9994215, -0.0210848, 0.0266687, -0.0079673,
+  #         0., 0., 0., 1.]
+
+
+#plane noise
+# Adjusting zpw_n:
+# 0.001 <= 0.025 == 0.05 == 0.1
+#mono:0.01 stereo:0.005
+roll_n: 0.01 # 0.01
+#mono:0.01  stereo:0.005
+pitch_n: 0.01 # 0.01
+#mono:0.05 stereo:0.025
+zpw_n: 0.05 # 0.05
+
+
+#Multiple thread support
+multiple_thread: 1
+
+#feature traker paprameters
+max_cnt: 150            # max feature number in feature tracking
+min_dist: 30            # min distance between two features 
+freq: 15                # frequence (Hz) of publish tracking result. At least 10Hz for good estimation. If set 0, the frequence will be same as raw image
+F_threshold: 1.0        # ransac threshold (pixel)
+show_track: 1           # publish tracking image as topic
+flow_back: 1            # perform forward and backward optical flow to improve feature tracking accuracy
+
+#optimization parameters
+max_solver_time: 0.04  # max solver itration time (ms), to guarantee real time
+max_num_iterations: 8   # max solver itrations, to guarantee real time
+keyframe_parallax: 10.0 # keyframe selection threshold (pixel)
+
+#imu parameters       The more accurate parameters you provide, the better performance
+acc_n: 0.04641977329563476         # accelerometer measurement noise standard deviation. #0.2   0.04
+gyr_n: 0.013213877349668923        # gyroscope measurement noise standard deviation.     #0.05  0.004
+acc_w: 0.0019703618139556927         # accelerometer bias random work noise standard deviation.  #0.002
+gyr_w: 2.206282069791498e-05       # gyroscope bias random work noise standard deviation.     #4.0e-5
+g_norm: 9.805 # 9.805 9.81007        # gravity magnitude
+
+#wheel parameters
+# Choose the optimal:
+# Adjust wheel_gyro_noise_sigma:
+#   0.004 0.003 < 0.003 0.003 > 0.002 0.003
+# Adjust wheel_velocity_noise_sigma:
+#   0.003 0.004 < 0.003 0.003 > 0.003 0.002
+
+# Choose the optimal:
+# Adjust wheel_gyro_noise_sigma:
+# 0.00 <= 0.002 == 0.008 == 0.016 >= 0.05
+# Adjust wheel_velocity_noise_sigma:
+#  0.00 (horrible) <= 0.005 == 0.01 >= 0.05 (shaking)
+
+# rad/s mono:0.004 stereo:0.002
+wheel_gyro_noise_sigma: 0.004 # 0.004 0.003
+#　m/s mono:0.01  stereo:0.006
+wheel_velocity_noise_sigma: 0.01 # 0.01 0.004
+
+estimate_wheel_intrinsic: 0
+# 0  Have an accurate intrinsic parameters. We will trust the following sx, sy, sw, don't change it.
+# 1  Have an initial guess about intrinsic parameters. We will optimize around your initial guess.
+# 2  TODO Don't know anything about intrinsic parameters. You don't need to give sx, sy, sw. We will try to calibrate it. Do some rotation movement at beginning.
+#If you choose 0 or 1, you should write down the following sx, sy, sw.
+# wheel intrinsic
+sx: 1.0 # 1.0
+sy: 1.0 # 1.0
+sw: 1.0 # 1.0 0.005
+
+
+#unsynchronization parameters
+estimate_td: 0                      # online estimate time offset between camera and imu
+td: 0.00                             # initial value of time offset. unit: s. readed image clock + td = real image clock (IMU clock)
+#unsynchronization parameters
+estimate_td_wheel: 0                      # online estimate time offset between camera and wheel
+td_wheel: 0.00                             # initial value of time offset. unit: s. readed image clock + td = real image clock (IMU clock)
+#loop closure parameters
+load_previous_pose_graph: 0        # load and reuse previous pose graph; load from 'pose_graph_save_path'
+pose_graph_save_path: "/home/wfram/viw_fusion_ws/src/VINS-Fusion/output/pose_graph" # save and load path
+save_image: 0                   # save image in pose graph for visualization prupose; you can close this function by setting 0 

@@ -1,0 +1,5 @@
+<launch>
+    <node name="rvizvisualisation" pkg="rviz" type="rviz" output="log" args="-d $(find vins)/../config/vins_rviz_config.rviz" />
+    <node name="viwo" pkg="vins" type="viwo_node" output="log" args="/home/wfram/viw_fusion_ws/src/VIW-Fusion/config/ozyland/ozyland_vwo_config.yaml" />
+<!--    <node pkg="rosbag" type="play" name="player_1" output="screen" args="&#45;&#45;clock /media/wfram/Samsung_data1/sber_2022_march/datasets/courier/2_rsbp/viwo.bag"/>-->
+</launch>

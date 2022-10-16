@@ -340,6 +340,7 @@ void Estimator::inputWheel(double t, const Vector3d &linearVelocity, const Vecto
         mWheelPropagate.unlock();
     }
 }
+
 void Estimator::inputFeature(double t, const map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> &featureFrame)
 {
     mBuf.lock();
@@ -469,7 +470,7 @@ void Estimator::processMeasurements()
                     break;
                 else
                 {
-                    printf("wait for wheel ... \n");
+//                    printf("wait for wheel ... \n");
                     if (! MULTIPLE_THREAD)
                         return;
                     std::chrono::milliseconds dura(5);
@@ -687,6 +688,7 @@ void Estimator::integrateWheelPreintegration( double t, Eigen::Vector3d& P, Eige
     P = Pwo;
     Q = Qwo;
 }
+
 void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> &image, const double header)
 {
     ROS_DEBUG("new image coming ------------------------------------------");
@@ -736,6 +738,7 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
 
     if (solver_flag == INITIAL)
     {
+        ROS_INFO("Preparing to initialize");
         // monocular + IMU initilization
         if (!STEREO && USE_IMU)
         {
@@ -749,6 +752,30 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
                 }
                 if(result)
                 {
+                    optimization();
+                    updateLatestStates();
+                    solver_flag = NON_LINEAR;
+                    slideWindow();
+                    ROS_INFO("Initialization finish!");
+                }
+                else
+                    slideWindow();
+            }
+        }
+
+        if (!STEREO && !USE_IMU)
+        {
+            if (frame_count == WINDOW_SIZE)
+            {
+                bool result = false;
+                if(ESTIMATE_EXTRINSIC != 2 && (header - initial_timestamp) > 0.1)
+                {
+                    result = initialStructure();
+                    initial_timestamp = header;
+                }
+                if(result)
+                {
+                    ROS_INFO("Solved initial structure. Going to optimization");
                     optimization();
                     updateLatestStates();
                     solver_flag = NON_LINEAR;
@@ -877,6 +904,7 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
     }
 }
 void Estimator::initPlane(){
+    ROS_INFO("initialize plane");
     double zpws = 0.0;
     std::vector<Eigen::Quaterniond> qpws;
     for (int i = 0; i < frame_count; ++i) {
@@ -890,8 +918,10 @@ void Estimator::initPlane(){
     double yaw = Utility::R2ypr(rpw).x();
     rpw = Utility::ypr2R(Eigen::Vector3d{-yaw, 0, 0}) * rpw;
     zpw = zpws / frame_count;
+
     std::cout<<"Init plane:  rpw: "<<Eigen::AngleAxisd(rpw).axis().transpose()<<" zpw: "<<zpw<<std::endl;
 }
+
 bool Estimator::initialStructure()
 {
     TicToc t_sfm;
@@ -900,6 +930,7 @@ bool Estimator::initialStructure()
         //TODO(tzhang):该作用域段主要用于检测IMU运动是否充分，但是目前代码中，运动不充分时并未进行额外处理，此处可改进；或者直接删除该段
         map<double, ImageFrame>::iterator frame_it;
         Vector3d sum_g;
+        ROS_INFO("Check IMU observability");
         for (frame_it = all_image_frame.begin(), frame_it++; frame_it != all_image_frame.end(); frame_it++)
         {
             double dt = frame_it->second.pre_integration->sum_dt;
@@ -929,6 +960,7 @@ bool Estimator::initialStructure()
     Vector3d T[frame_count + 1]; // t_w_c
     map<int, Vector3d> sfm_tracked_points; //观测到的路标点的在世界坐标系的位置，索引为路标点的编号
     vector<SFMFeature> sfm_f;
+    ROS_INFO("Prepare to solve SfM");
     for (auto &it_per_id : f_manager.feature) //对所有路标点进行遍历
     {
         int imu_j = it_per_id.start_frame - 1;
@@ -956,7 +988,7 @@ bool Estimator::initialStructure()
               relative_R, relative_T,
               sfm_f, sfm_tracked_points))
     {
-        ROS_DEBUG("global SFM failed!");
+        ROS_INFO("global SFM failed!");
         marginalization_flag = MARGIN_OLD; //global sfm求解失败，对老的图像帧进行边缘化
         return false;
     }
@@ -972,7 +1004,8 @@ bool Estimator::initialStructure()
         if((frame_it->first) == Headers[i])
         {
             frame_it->second.is_key_frame = true;
-            frame_it->second.R = Q[i].toRotationMatrix() * RIC[0].transpose(); //得到R_w_i 也即R_c0_i
+            // 得到R_w_i 也即R_c0_i (see notations in VINS paper)
+            frame_it->second.R = Q[i].toRotationMatrix() * RIC[0].transpose();
             frame_it->second.T = T[i]; //TODO(tzhang):没有对imu与cam平移进行处理，是因为两者之间的平移量较小，影响不大？ 可优化
             i++;
             continue; //若图像帧在滑窗中，直接利用上述global sfm的结果乘以R_c_i，得到imu到world的变换矩阵即R_w_i
@@ -1011,7 +1044,7 @@ bool Estimator::initialStructure()
         if(pts_3_vector.size() < 6)
         {
             cout << "pts_3_vector size " << pts_3_vector.size() << endl;
-            ROS_DEBUG("Not enough points for solve pnp !");
+            ROS_INFO("Not enough points for solve pnp !");
             return false;
         }
         /**
@@ -1028,7 +1061,7 @@ bool Estimator::initialStructure()
          */
         if (! cv::solvePnP(pts_3_vector, pts_2_vector, K, D, rvec, t, 1))
         {
-            ROS_DEBUG("solve pnp fail!");
+            ROS_INFO("solve pnp fail!");
             return false;
         }
         cv::Rodrigues(rvec, r);
@@ -1038,7 +1071,8 @@ bool Estimator::initialStructure()
         MatrixXd T_pnp;
         cv::cv2eigen(t, T_pnp); // 通过PnP求解得到t_c0_c
         T_pnp = R_pnp * (-T_pnp);
-        frame_it->second.R = R_pnp * RIC[0].transpose();//得到R_c0_i
+        // 得到R_c0_i
+        frame_it->second.R = R_pnp * RIC[0].transpose();
         frame_it->second.T = T_pnp; //t_c0_c （PS：未考虑camera与imu之间的平移,由于尺度因子未知，此时不用考虑；在求解出尺度因子后，会考虑）
     }
     if (visualInitialAlign())
@@ -1053,18 +1087,27 @@ bool Estimator::initialStructure()
 
 bool Estimator::visualInitialAlign()
 {
+    ROS_INFO("VI Alignment");
     TicToc t_g;
     VectorXd x;
     //solve scale
-    bool result = VisualIMUAlignment(all_image_frame, Bgs, g, x);  //IMU与camera对准，计算更新了陀螺仪偏置bgs、重力向量gc0、尺度因子s、速度vk
+    // TODO: where g is in use?
+    //      1) in processIMU(): each time we receive a new IMU measurement, it makes sense how we estimated g
+    //          not VWO case, since we don't have these measurements
+    //      2) (!) it's used to construct R0 matrix, which is further used to update this g
+    //      3) in fast IMU prediction
+    //          not VWO case, since we don't have these measurements
+    //      4) in visual alignment
+    bool result = VisualAlignment(all_image_frame, Bgs, g, x);  //IMU与camera对准，计算更新了陀螺仪偏置bgs、重力向量gc0、尺度因子s、速度vk
     if(!result)
     {
-        ROS_DEBUG("solve g failed!");
+        ROS_WARN("solve g failed!");
         return false;
     }
 
     // change state
     //Headers[i]存储图像帧时间戳，初始化过程中，仅边缘化老的图像帧，因此留在滑窗中的均为关键帧
+    ROS_INFO("changing state vars");
     for (int i = 0; i <= frame_count; i++)
     {
         Matrix3d Ri = all_image_frame[Headers[i]].R;
@@ -1075,18 +1118,26 @@ bool Estimator::visualInitialAlign()
     }
 
     double s = (x.tail<1>())(0);
-    for (int i = 0; i <= WINDOW_SIZE; i++)
-    {
-        //得到陀螺仪bias新值，预积分重新传播；此处的预积分为Estimator类中的预积分；
-        //图像帧中预积分的重新传播，在计算bg后已经完成
-        //TODO(tzhang)：Estimator与图像帧中均维护预积分，重复，是否有必要？待优化
-        pre_integrations[i]->repropagate(Vector3d::Zero(), Bgs[i]);
+    // TODO: we don't need to estimate bias, hence remove the repropagation
+
+    if (USE_IMU) {
+        for (int i = 0; i <= WINDOW_SIZE; i++)
+        {
+            //得到陀螺仪bias新值，预积分重新传播；此处的预积分为Estimator类中的预积分；
+            //图像帧中预积分的重新传播，在计算bg后已经完成
+            //TODO(tzhang)：Estimator与图像帧中均维护预积分，重复，是否有必要？待优化
+            pre_integrations[i]->repropagate(Vector3d::Zero(), Bgs[i]);
+        }
     }
+
+    // TODO: compare if scale in VIO and VWO cases estimated correctly
     //利用尺度因子，对t_c0_b的更新；注意此时用到了camera与imu之间的平移量
+    ROS_INFO("Scale the pose");
     for (int i = frame_count; i >= 0; i--)//根据该式可以得出Ps[0] = Pc0b0 = 0;
         Ps[i] = s * Ps[i] - Rs[i] * TIC[0] - (s * Ps[0] - Rs[0] * TIC[0]);//sPc0ck - Rc0bk*tbc
     int kv = -1;
     map<double, ImageFrame>::iterator frame_i;
+    ROS_INFO("Update velocities");
     for (frame_i = all_image_frame.begin(); frame_i != all_image_frame.end(); frame_i++)
     {
         if(frame_i->second.is_key_frame)
@@ -1096,13 +1147,19 @@ bool Estimator::visualInitialAlign()
         }
     }
     ROS_WARN_STREAM("g0     " << g.transpose());
+    // where to use R0?
+    //      1) to compute yaw below
+    //      2) to compute rot_diff below
     Matrix3d R0 = Utility::g2R(g);//根据基于当前世界坐标系计算得到的重力方向与实际重力方向差异，计算当前世界坐标系的修正量；
     //注意：由于yaw不可观，修正量中剔除了yaw影响，也即仅将世界坐标系的z向与重力方向对齐
+    // where to use yaw? answer: only to update R0
     double yaw = Utility::R2ypr(R0 * Rs[0]).x();
     R0 = Utility::ypr2R(Eigen::Vector3d{-yaw, 0, 0}) * R0;
     g = R0 * g;
     //Matrix3d rot_diff = R0 * Rs[0].transpose();
+    // Q: where to use rot_diff? A: only to update state vars (three lines below)
     Matrix3d rot_diff = R0;//将世界坐标系与重力方向对齐，之前的世界坐标系Rs[0]根据图像帧c0定义得到，并未对准到重力方向
+    // TODO: do we need it in VWO case?
     for (int i = 0; i <= frame_count; i++)
     {
         Ps[i] = rot_diff * Ps[i];//t_w_bi
@@ -2062,7 +2119,6 @@ void Estimator::slideWindowOld()
         f_manager.removeBack();  //初始化未完成，只是更新第一次观测到路标点的图像帧的索引
 }
 
-
 void Estimator::getPoseInWorldFrame(Eigen::Matrix4d &T)
 {
     T = Eigen::Matrix4d::Identity();
@@ -2183,7 +2239,9 @@ void Estimator::outliersRejection(set<int> &removeIndex)
 
     }
 }
+
 //中值积分IMU惯性解算
+// Used only if IMU measurements received
 void Estimator::fastPredictIMU(double t, Eigen::Vector3d linear_acceleration, Eigen::Vector3d angular_velocity)
 {
     double dt = t - latest_time;
@@ -2201,8 +2259,12 @@ void Estimator::fastPredictIMU(double t, Eigen::Vector3d linear_acceleration, Ei
 }
 
 //中值积分Wheel航迹解算
+// TODO: 1) turn off the prediction (both pure and based on motion model)
+//       2) check how rotation from odom to body affects
+
 void Estimator::fastPredictWheel(double t, Eigen::Vector3d linear_velocity, Eigen::Vector3d angular_velocity)
 {
+    ROS_INFO("perform fast wheel motion model prediction");
     double dt = t - latest_time_wheel;
     latest_time_wheel = t;
     Eigen::Vector3d un_gyr = 0.5 * latest_sw * (latest_gyr_0 + angular_velocity);
@@ -2217,8 +2279,10 @@ void Estimator::fastPredictWheel(double t, Eigen::Vector3d linear_velocity, Eige
 
 }
 //中值积分Wheel航迹解算
+
 void Estimator::fastPredictPureWheel(double t, Eigen::Vector3d linear_velocity, Eigen::Vector3d angular_velocity, Eigen::Vector3d &P, Eigen::Quaterniond &Q, Eigen::Vector3d &V)
 {
+    ROS_INFO("perform pure wheel fast prediction");
     static bool first_time = false;
     static Eigen::Quaterniond Q_latest;
     static Eigen::Vector3d V_latest = Eigen::Vector3d::Zero();
@@ -2253,6 +2317,7 @@ void Estimator::fastPredictPureWheel(double t, Eigen::Vector3d linear_velocity, 
     Q = Q_latest;
     V = V_latest;
 }
+
 //获取滑窗中最新帧时刻的状态，并在世界坐标系下进行中值积分；初始化完成后，最新状态在inputIMU函数中发布
 void Estimator::updateLatestStates()
 {

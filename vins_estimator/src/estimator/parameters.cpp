@@ -29,6 +29,8 @@ std::vector<Eigen::Vector3d> TIC;
 Eigen::Matrix3d RIO;
 Eigen::Vector3d TIO;
 
+// TODO: it really depends our knowledge about how the camera frame is rotated (or odom)
+//Eigen::Vector3d G{0.0, -9.8, 0.0};
 Eigen::Vector3d G{0.0, 0.0, 9.8};
 
 double BIAS_ACC_THRESHOLD;
@@ -126,6 +128,11 @@ void readParameters(std::string config_file)
 
     MULTIPLE_THREAD = fsSettings["multiple_thread"];
 
+    // It affects:
+    //      1) whether to read IMU related parameters (see below), including topic name
+    //      2) settings for extrinsic calib flags
+    //      3) some pose graph settings (NO NEED NOW)
+    //      4) we don't call func getIMUInterval(), hence don't fill acc and gyro buffers
     USE_IMU = fsSettings["imu"];
     printf("USE_IMU: %d\n", USE_IMU);
 
@@ -138,6 +145,7 @@ void readParameters(std::string config_file)
     USE_PLANE = fsSettings["plane"];
     printf("USE_PLANE: %d\n", USE_PLANE);
 
+    // TODO: what IMU_TOPIC affects?
     if(USE_IMU)
     {
         fsSettings["imu_topic"] >> IMU_TOPIC;
@@ -146,6 +154,7 @@ void readParameters(std::string config_file)
         ACC_W = fsSettings["acc_w"];
         GYR_N = fsSettings["gyr_n"];
         GYR_W = fsSettings["gyr_w"];
+        // TODO: return to normal setting
         G.z() = fsSettings["g_norm"];
     }
 
@@ -299,6 +308,9 @@ void readParameters(std::string config_file)
         fsSettings["body_T_cam0"] >> cv_T;
         Eigen::Matrix4d T;
         cv::cv2eigen(cv_T, T);
+        // TODO: Q: where to use RIC? A: in estimator
+        //      1) to fill ric in setParameter()
+        //      2) in initialStructure()
         RIC.push_back(T.block<3, 3>(0, 0));
         TIC.push_back(T.block<3, 1>(0, 3));
         //归一化
@@ -344,7 +356,7 @@ void readParameters(std::string config_file)
         foutD.close();
     }
 
-
+    // num_of_cam affects only NUM_OF_CAM flag
     NUM_OF_CAM = fsSettings["num_of_cam"];
     printf("camera number %d\n", NUM_OF_CAM);
 
@@ -363,6 +375,10 @@ void readParameters(std::string config_file)
     std::string cam0Path = configPath + "/" + cam0Calib;
     CAM_NAMES.push_back(cam0Path);
 
+    // if that's it,
+    //      1) STEREO = 1,
+    //      2) take cam1_calib, body_T_cam1 and push them to RIC, TIC,
+    //      3) see iterations in the code
     if(NUM_OF_CAM == 2)
     {
         STEREO = 1;

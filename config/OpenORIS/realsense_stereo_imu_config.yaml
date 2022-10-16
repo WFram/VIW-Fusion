@@ -2,21 +2,21 @@
 
 #common parameters
 #support: 1 imu 1 cam; 1 imu 2 cam: 2 cam; 
-imu: 1
+imu: 0
 wheel: 1
-only_initial_with_wheel: 0 #只利用wheel进行初始化，不加入因子图
+only_initial_with_wheel: 0
 plane: 1
 num_of_cam: 1
 
 imu_topic: "/camera/imu"
-wheel_topic: "/ridgeback_velocity_controller/odom"   #"/ridgeback_velocity_controller/odom"， “/odometry/filtered”
-image0_topic: "/camera/infra1/image_rect_raw"
-image1_topic: "/camera/infra2/image_rect_raw"
-output_path: "/home/td/slam/vins_fusion_ws/src/VINS-Fusion/output"
+wheel_topic: "/odom"
+image0_topic: "/d400/color/image_raw"
+image1_topic: "/d400/color/image_raw"
+output_path: "/home/wfram/viw_fusion_ws/src/VIW-Fusion/output"
 
-cam0_calib: "color.yaml"
-cam1_calib: "color.yaml"
-image_width: 640
+cam0_calib: "d400.yaml"
+cam1_calib: "d400.yaml"
+image_width: 848
 image_height: 480
 
 # Extrinsic parameter between IMU and Camera.
@@ -61,16 +61,15 @@ extrinsic_type_wheel: 3 # 0 ALL
   # 3 no z
 # 4 no rotation and no z
 
-#wheel to body
+#wheel to body TODO: inv
 body_T_wheel: !!opencv-matrix
   rows: 4
   cols: 4
   dt: d
-  data: [0, -1, 0, 0.023,
-         0, 0, -1, 0.730,
-         1, 0, 0, -0.248,
-         0, 0, 0, 1]
-
+  data: [9.9792816252667338e-03, 6.5348103708624539e-03, 9.9992885256485176e-01, 2.2648368490900000e-01,
+         -9.9982014658446139e-01, 1.6192923276330706e-02, 9.8723715283343672e-03, -5.1141940356500000e-02,
+         -1.6127257115523985e-02, -9.9984753112121250e-01, 6.6952288046080444e-03, 9.1600000000000004e-01,
+         0., 0., 0., 1.]
 
 #plane noise
 #mono:0.01 stereo:0.005
@@ -86,7 +85,7 @@ multiple_thread: 1
 #feature traker paprameters
 max_cnt: 150            # max feature number in feature tracking
 min_dist: 30            # min distance between two features 
-freq: 10                # frequence (Hz) of publish tracking result. At least 10Hz for good estimation. If set 0, the frequence will be same as raw image 
+freq: 10                # frequence (Hz) of publish tracking result. At least 10Hz for good estimation. If set 0, the frequence will be same as raw image
 F_threshold: 1.0        # ransac threshold (pixel)
 show_track: 1           # publish tracking image as topic
 flow_back: 1            # perform forward and backward optical flow to improve feature tracking accuracy
