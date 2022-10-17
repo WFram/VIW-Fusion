@@ -1,5 +1,19 @@
 <launch>
+    <arg name="paused" default="false"/>
+    <arg name="use_sim_time" default="true"/>
+    <arg name="gui" default="true"/>
+    <arg name="headless" default="false"/>
+    <arg name="debug" default="false"/>
+
+    <include file="$(find gazebo_ros)/launch/empty_world.launch">
+        <arg name="debug" value="$(arg debug)" />
+        <arg name="gui" value="$(arg gui)" />
+        <arg name="paused" value="$(arg paused)"/>
+        <arg name="use_sim_time" value="$(arg use_sim_time)"/>
+        <arg name="headless" value="$(arg headless)"/>
+        <arg name="world_name" value="$(find vins)/worlds/ozyland.world"/>
+    </include>
+
+
     <node name="rvizvisualisation" pkg="rviz" type="rviz" output="log" args="-d $(find vins)/../config/vins_rviz_config.rviz" />
-    <node name="viwo" pkg="vins" type="viwo_node" output="log" args="/home/wfram/viw_fusion_ws/src/VIW-Fusion/config/ozyland/ozyland_vwo_config.yaml" />
-<!--    <node pkg="rosbag" type="play" name="player_1" output="screen" args="&#45;&#45;clock /media/wfram/Samsung_data1/sber_2022_march/datasets/courier/2_rsbp/viwo.bag"/>-->
 </launch>

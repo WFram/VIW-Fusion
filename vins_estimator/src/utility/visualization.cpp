@@ -305,8 +305,8 @@ void pubOdometry(const Estimator &estimator, const std_msgs::Header &header)
               << pose_stamped.pose.orientation.z << " "
               << pose_stamped.pose.orientation.w << std::endl;
         auto tmp_T = pose_stamped.pose.position;
-        printf("time: %f, t: %f %f %f q: %f %f %f %f \n", header.stamp.toSec(), tmp_T.x, tmp_T.y, tmp_T.z,
-               tmp_Q.w(), tmp_Q.x(), tmp_Q.y(), tmp_Q.z());
+//        printf("time: %f, t: %f %f %f q: %f %f %f %f \n", header.stamp.toSec(), tmp_T.x, tmp_T.y, tmp_T.z,
+//               tmp_Q.w(), tmp_Q.x(), tmp_Q.y(), tmp_Q.z());
 
     }
 }
@@ -514,7 +514,7 @@ void pubPointCloud(const Estimator &estimator, const std_msgs::Header &header)
         p.z = w_pts_i(2);
         point_cloud.points.push_back(p);
     }
-    ROS_INFO("good point size: %d", point_cloud.points.size());
+    ROS_DEBUG("good point size: %d", point_cloud.points.size());
     pub_point_cloud.publish(point_cloud);
 
 

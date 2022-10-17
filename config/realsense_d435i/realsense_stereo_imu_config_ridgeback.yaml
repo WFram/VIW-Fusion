@@ -2,11 +2,11 @@
 
 #common parameters
 #support: 1 imu 1 cam; 1 imu 2 cam: 2 cam;
-imu: 0 # WF
+imu: 1 # WF
 wheel: 1
 only_initial_with_wheel: 0 #只利用wheel进行初始化，不加入因子图
 plane: 1
-num_of_cam: 1
+num_of_cam: 2
 
 imu_topic: "/imu/data"
 wheel_topic: "/ridgeback_velocity_controller/odom"   #"/ridgeback_velocity_controller/odom"， “/odometry/filtered”
@@ -51,14 +51,14 @@ body_T_cam0: !!opencv-matrix
            0.0,  -1.0,   0.0,  0.544,
            0,     0,     0,    1 ]
 
-#body_T_cam1: !!opencv-matrix
-#   rows: 4
-#   cols: 4
-#   dt: d
-#   data: [ 0.0,   0.0,   1.0,  0.041,
-#           -1.0,   0.0,   0.0, 0.258,
-#           0.0,  -1.0,   0.0,  0.544,
-#           0,     0,     0,    1 ]
+body_T_cam1: !!opencv-matrix
+  rows: 4
+  cols: 4
+  dt: d
+  data: [ 0.0,   0.0,   1.0,  0.041,
+           -1.0,   0.0,   0.0, 0.258,
+           0.0,  -1.0,   0.0,  0.544,
+           0,     0,     0,    1 ]
 
 
 # Extrinsic parameter between IMU and Wheel.
@@ -96,7 +96,7 @@ roll_n: 0.01
 #mono:0.01  stereo:0.005
 pitch_n: 0.01
 #mono:0.05 stereo:0.025
-zpw_n: 0.05
+zpw_n: 0.1
 
 
 #Multiple thread support

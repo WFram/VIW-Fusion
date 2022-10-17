@@ -322,7 +322,9 @@ void process()
             else
                 ptr = cv_bridge::toCvCopy(image_msg, sensor_msgs::image_encodings::MONO8);
             
-            cv::Mat image = ptr->image;
+            cv::Mat image_src = ptr->image;
+            cv::Mat image;
+            cv::resize(image_src, image, cv::Size(COL, ROW), cv::INTER_LINEAR);
             // build keyframe
             Vector3d T = Vector3d(pose_msg->pose.pose.position.x,
                                   pose_msg->pose.pose.position.y,

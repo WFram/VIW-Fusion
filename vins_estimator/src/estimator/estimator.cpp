@@ -210,11 +210,14 @@ void Estimator::changeSensorType(int use_imu, int use_stereo)
     }
 }
 
-void Estimator::inputImage(double t, const cv::Mat &_img, const cv::Mat &_img1)
+void Estimator::inputImage(double t, const cv::Mat &img, const cv::Mat &_img1)
 {
     inputImageCnt++;
     map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> featureFrame;
     TicToc featureTrackerTime;
+
+    cv::Mat _img;
+    cv::resize(img, _img, cv::Size(COL, ROW), cv::INTER_LINEAR);
 
     if(_img1.empty())
         featureFrame = featureTracker.trackImage(t, _img);
@@ -705,7 +708,7 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
     }
 
     ROS_DEBUG("%s", marginalization_flag ? "Non-keyframe" : "Keyframe");
-    ROS_INFO("%s", marginalization_flag ? "Non-keyframe" : "Keyframe");
+    ROS_DEBUG("%s", marginalization_flag ? "Non-keyframe" : "Keyframe");
     ROS_DEBUG("Solving %d", frame_count);
     ROS_DEBUG("number of feature: %d", f_manager.getFeatureCount());
     Headers[frame_count] = header;
@@ -738,7 +741,7 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
 
     if (solver_flag == INITIAL)
     {
-        ROS_INFO("Preparing to initialize");
+        ROS_DEBUG("Preparing to initialize");
         // monocular + IMU initilization
         if (!STEREO && USE_IMU)
         {
@@ -756,7 +759,7 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
                     updateLatestStates();
                     solver_flag = NON_LINEAR;
                     slideWindow();
-                    ROS_INFO("Initialization finish!");
+                    ROS_DEBUG("Initialization finish!");
                 }
                 else
                     slideWindow();
@@ -775,12 +778,12 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
                 }
                 if(result)
                 {
-                    ROS_INFO("Solved initial structure. Going to optimization");
+ROS_DEBUG("Solved initial structure. Going to optimization");
                     optimization();
                     updateLatestStates();
                     solver_flag = NON_LINEAR;
                     slideWindow();
-                    ROS_INFO("Initialization finish!");
+ROS_DEBUG("Initialization finish!");
                 }
                 else
                     slideWindow();
@@ -813,7 +816,7 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
                 updateLatestStates();
                 solver_flag = NON_LINEAR;
                 slideWindow();
-                ROS_INFO("Initialization finish!");
+ROS_DEBUG("Initialization finish!");
             }
         }
 
@@ -830,7 +833,7 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
                 updateLatestStates();
                 solver_flag = NON_LINEAR;
                 slideWindow();
-                ROS_INFO("Initialization finish!");
+ROS_DEBUG("Initialization finish!");
             }
         }
 
@@ -904,7 +907,7 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
     }
 }
 void Estimator::initPlane(){
-    ROS_INFO("initialize plane");
+    ROS_DEBUG("initialize plane");
     double zpws = 0.0;
     std::vector<Eigen::Quaterniond> qpws;
     for (int i = 0; i < frame_count; ++i) {
@@ -930,7 +933,7 @@ bool Estimator::initialStructure()
         //TODO(tzhang):该作用域段主要用于检测IMU运动是否充分，但是目前代码中，运动不充分时并未进行额外处理，此处可改进；或者直接删除该段
         map<double, ImageFrame>::iterator frame_it;
         Vector3d sum_g;
-        ROS_INFO("Check IMU observability");
+        ROS_DEBUG("Check IMU observability");
         for (frame_it = all_image_frame.begin(), frame_it++; frame_it != all_image_frame.end(); frame_it++)
         {
             double dt = frame_it->second.pre_integration->sum_dt;
@@ -951,7 +954,7 @@ bool Estimator::initialStructure()
         //ROS_WARN("IMU variation %f!", var);
         if(var < 0.25)
         {
-            ROS_INFO("IMU excitation not enouth!");
+            ROS_WARN("IMU excitation not enouth!");
             //return false;
         }
     }
@@ -960,7 +963,7 @@ bool Estimator::initialStructure()
     Vector3d T[frame_count + 1]; // t_w_c
     map<int, Vector3d> sfm_tracked_points; //观测到的路标点的在世界坐标系的位置，索引为路标点的编号
     vector<SFMFeature> sfm_f;
-    ROS_INFO("Prepare to solve SfM");
+    ROS_DEBUG("Prepare to solve SfM");
     for (auto &it_per_id : f_manager.feature) //对所有路标点进行遍历
     {
         int imu_j = it_per_id.start_frame - 1;
@@ -980,7 +983,7 @@ bool Estimator::initialStructure()
     int l;
     if (!relativePose(relative_R, relative_T, l)) //通过本质矩阵求取滑窗最后一帧（WINDOW_SIZE）到图像帧l的旋转和平移变换
     {//共视点大于20个、视差足够大，才进行求取
-        ROS_INFO("Not enough features or parallax; Move device around");
+        ROS_WARN("Not enough features or parallax; Move device around");
         return false;
     }
     GlobalSFM sfm; // 通过global sfm求取滑窗中的图像帧位姿，以及观测到的路标点的位置
@@ -988,7 +991,7 @@ bool Estimator::initialStructure()
               relative_R, relative_T,
               sfm_f, sfm_tracked_points))
     {
-        ROS_INFO("global SFM failed!");
+        ROS_WARN("global SFM failed!");
         marginalization_flag = MARGIN_OLD; //global sfm求解失败，对老的图像帧进行边缘化
         return false;
     }
@@ -1044,7 +1047,7 @@ bool Estimator::initialStructure()
         if(pts_3_vector.size() < 6)
         {
             cout << "pts_3_vector size " << pts_3_vector.size() << endl;
-            ROS_INFO("Not enough points for solve pnp !");
+            ROS_WARN("Not enough points for solve pnp !");
             return false;
         }
         /**
@@ -1061,7 +1064,7 @@ bool Estimator::initialStructure()
          */
         if (! cv::solvePnP(pts_3_vector, pts_2_vector, K, D, rvec, t, 1))
         {
-            ROS_INFO("solve pnp fail!");
+            ROS_WARN("solve pnp fail!");
             return false;
         }
         cv::Rodrigues(rvec, r);
@@ -1079,7 +1082,7 @@ bool Estimator::initialStructure()
         return true;
     else
     {
-        ROS_INFO("misalign visual structure with IMU");
+        ROS_WARN("misalign visual structure with IMU");
         return false;
     }
 
@@ -1087,7 +1090,7 @@ bool Estimator::initialStructure()
 
 bool Estimator::visualInitialAlign()
 {
-    ROS_INFO("VI Alignment");
+    ROS_DEBUG("VI Alignment");
     TicToc t_g;
     VectorXd x;
     //solve scale
@@ -1107,7 +1110,7 @@ bool Estimator::visualInitialAlign()
 
     // change state
     //Headers[i]存储图像帧时间戳，初始化过程中，仅边缘化老的图像帧，因此留在滑窗中的均为关键帧
-    ROS_INFO("changing state vars");
+    ROS_DEBUG("changing state vars");
     for (int i = 0; i <= frame_count; i++)
     {
         Matrix3d Ri = all_image_frame[Headers[i]].R;
@@ -1132,12 +1135,12 @@ bool Estimator::visualInitialAlign()
 
     // TODO: compare if scale in VIO and VWO cases estimated correctly
     //利用尺度因子，对t_c0_b的更新；注意此时用到了camera与imu之间的平移量
-    ROS_INFO("Scale the pose");
+    ROS_DEBUG("Scale the pose");
     for (int i = frame_count; i >= 0; i--)//根据该式可以得出Ps[0] = Pc0b0 = 0;
         Ps[i] = s * Ps[i] - Rs[i] * TIC[0] - (s * Ps[0] - Rs[0] * TIC[0]);//sPc0ck - Rc0bk*tbc
     int kv = -1;
     map<double, ImageFrame>::iterator frame_i;
-    ROS_INFO("Update velocities");
+    ROS_DEBUG("Update velocities");
     for (frame_i = all_image_frame.begin(); frame_i != all_image_frame.end(); frame_i++)
     {
         if(frame_i->second.is_key_frame)
@@ -2264,7 +2267,7 @@ void Estimator::fastPredictIMU(double t, Eigen::Vector3d linear_acceleration, Ei
 
 void Estimator::fastPredictWheel(double t, Eigen::Vector3d linear_velocity, Eigen::Vector3d angular_velocity)
 {
-    ROS_INFO("perform fast wheel motion model prediction");
+    ROS_DEBUG("perform fast wheel motion model prediction");
     double dt = t - latest_time_wheel;
     latest_time_wheel = t;
     Eigen::Vector3d un_gyr = 0.5 * latest_sw * (latest_gyr_0 + angular_velocity);
@@ -2282,7 +2285,7 @@ void Estimator::fastPredictWheel(double t, Eigen::Vector3d linear_velocity, Eige
 
 void Estimator::fastPredictPureWheel(double t, Eigen::Vector3d linear_velocity, Eigen::Vector3d angular_velocity, Eigen::Vector3d &P, Eigen::Quaterniond &Q, Eigen::Vector3d &V)
 {
-    ROS_INFO("perform pure wheel fast prediction");
+    ROS_DEBUG("perform pure wheel fast prediction");
     static bool first_time = false;
     static Eigen::Quaterniond Q_latest;
     static Eigen::Vector3d V_latest = Eigen::Vector3d::Zero();

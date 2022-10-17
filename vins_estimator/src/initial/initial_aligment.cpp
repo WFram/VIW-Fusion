@@ -343,7 +343,8 @@ bool LinearWheelAlignment(map<double, ImageFrame> &all_image_frame, Vector3d &g,
     double s = x(n_state - 1) / 100.0;//TODO:尺度因子处理，除以了100,（PS：100在tmp_A.block<3, 1>(0, 9)有所体现，但具体为何如此处理还未知
     ROS_INFO("estimated scale: %f", s);
 //    g = x.segment<3>(n_state - 4);
-    g << -0.268524, -10.0455, 0.468816;
+//    g << -0.268524, -10.0455, 0.468816;
+    g << 0.0, -9.805, 0.0;
     ROS_INFO_STREAM(" result g     " << g.norm() << " " << g.transpose());
     // TODO: check
 //    float g_diff = fabs(g.norm() - G.norm());
