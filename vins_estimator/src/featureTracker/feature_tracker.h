@@ -25,6 +25,11 @@
 #include "../estimator/parameters.h"
 #include "../utility/tic_toc.h"
 
+#define ROS_INFO RCUTILS_LOG_INFO
+#define ROS_WARN RCUTILS_LOG_WARN
+#define ROS_DEBUG RCUTILS_LOG_DEBUG
+#define ROS_ERROR RCUTILS_LOG_ERROR
+
 using namespace std;
 using namespace camodocal;
 using namespace Eigen;

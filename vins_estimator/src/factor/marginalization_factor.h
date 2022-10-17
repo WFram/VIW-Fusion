@@ -9,8 +9,7 @@
 
 #pragma once
 
-#include <ros/ros.h>
-#include <ros/console.h>
+#include <rclcpp/rclcpp.hpp>
 #include <cstdlib>
 #include <pthread.h>
 #include <ceres/ceres.h>
@@ -18,6 +17,11 @@
 
 #include "../utility/utility.h"
 #include "../utility/tic_toc.h"
+
+#define ROS_INFO RCUTILS_LOG_INFO
+#define ROS_WARN RCUTILS_LOG_WARN
+#define ROS_DEBUG RCUTILS_LOG_DEBUG
+#define ROS_ERROR RCUTILS_LOG_ERROR
 
 const int NUM_THREADS = 4; //边缘化过程中构建A、b的线程数目
 

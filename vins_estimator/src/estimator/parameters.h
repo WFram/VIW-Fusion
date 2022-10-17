@@ -10,7 +10,7 @@
 #pragma once
 
 #include <ros/ros.h>
-#include <geometry_msgs/PoseStamped.h>
+#include <geometry_msgs/msg/pose_stamped.hpp>
 #include <vector>
 #include <eigen3/Eigen/Dense>
 #include "../utility/utility.h"
@@ -18,6 +18,11 @@
 #include <opencv2/core/eigen.hpp>
 #include <fstream>
 #include <map>
+
+#define ROS_INFO RCUTILS_LOG_INFO
+#define ROS_WARN RCUTILS_LOG_WARN
+#define ROS_DEBUG RCUTILS_LOG_DEBUG
+#define ROS_ERROR RCUTILS_LOG_ERROR
 
 using namespace std;
 

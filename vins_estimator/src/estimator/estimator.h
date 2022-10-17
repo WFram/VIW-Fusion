@@ -11,8 +11,8 @@
  
 #include <thread>
 #include <mutex>
-#include <std_msgs/Header.h>
-#include <std_msgs/Float32.h>
+#include <std_msgs/msg/header.h>
+#include <std_msgs/msg/float32.h>
 #include <ceres/ceres.h>
 #include <unordered_map>
 #include <queue>
@@ -39,6 +39,10 @@
 #include "../factor/projectionOneFrameTwoCamFactor.h"
 #include "../featureTracker/feature_tracker.h"
 
+#define ROS_INFO RCUTILS_LOG_INFO
+#define ROS_WARN RCUTILS_LOG_WARN
+#define ROS_DEBUG RCUTILS_LOG_DEBUG
+#define ROS_ERROR RCUTILS_LOG_ERROR
 
 class Estimator
 {

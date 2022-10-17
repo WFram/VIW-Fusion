@@ -83,17 +83,18 @@ CameraExtrinsicAdjustType CAM_EXT_ADJ_TYPE;
 WheelExtrinsicAdjustType WHEEL_EXT_ADJ_TYPE;
 
 template <typename T>
-T readParam(ros::NodeHandle &n, std::string name)
+T readParam(rclcpp::Node::SharedPtr n, std::string name)
 {
     T ans;
-    if (n.getParam(name, ans))
+    if (n->get_parameter(name, ans))
     {
-        ROS_INFO_STREAM("Loaded " << name << ": " << ans);
+        ROS_INFO("Loaded %s: ", name);
+        std::cout << ans << std::endl;
     }
     else
     {
-        ROS_ERROR_STREAM("Failed to load " << name);
-        n.shutdown();
+        ROS_ERROR("Failed to load %s", name);
+        rclcpp::shutdown();
     }
     return ans;
 }
