@@ -50,6 +50,7 @@ FeatureTracker::FeatureTracker()
     stereo_cam = 0;
     n_id = 0;
     hasPrediction = false;
+    sum_n = 0;
 }
 // 把追踪到的点进行标记
 // 设置遮挡部分（鱼眼相机）
@@ -88,6 +89,16 @@ void FeatureTracker::setMask()
     }
 }
 
+void FeatureTracker::addPoints()
+{
+    for (auto &p : n_pts)
+    {
+        cur_pts.push_back(p);
+        ids.push_back(n_id++);
+        track_cnt.push_back(1);
+    }
+}
+
 double FeatureTracker::distance(cv::Point2f &pt1, cv::Point2f &pt2)
 {
     //printf("pt1: %f %f pt2: %f %f\n", pt1.x, pt1.y, pt2.x, pt2.y);
@@ -116,47 +127,133 @@ map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> FeatureTracker::trackIm
 
     if (prev_pts.size() > 0)
     {
-        TicToc t_o;
         vector<uchar> status;
-        vector<float> err;
-        if(hasPrediction)
+        if(!USE_GPU_ACC_FLOW)
         {
-            cur_pts = predict_pts;
-            cv::calcOpticalFlowPyrLK(prev_img, cur_img, prev_pts, cur_pts, status, err, cv::Size(21, 21), 1,
-                    //迭代算法的终止条件
-            cv::TermCriteria(cv::TermCriteria::COUNT+cv::TermCriteria::EPS, 30, 0.01), cv::OPTFLOW_USE_INITIAL_FLOW);
-            
-            int succ_num = 0;
-            for (size_t i = 0; i < status.size(); i++)
+            TicToc t_o;
+            vector<float> err;
+            if (hasPrediction)
             {
-                if (status[i])
-                    succ_num++;
+                cur_pts = predict_pts;
+                cv::calcOpticalFlowPyrLK(prev_img, cur_img, prev_pts, cur_pts, status, err, cv::Size(21, 21), 1,
+                        //迭代算法的终止条件
+                                         cv::TermCriteria(cv::TermCriteria::COUNT + cv::TermCriteria::EPS, 30, 0.01),
+                                         cv::OPTFLOW_USE_INITIAL_FLOW);
+
+                int succ_num = 0;
+                for (size_t i = 0; i < status.size(); i++) {
+                    if (status[i])
+                        succ_num++;
+                }
+                if (succ_num < 10)//小于10时，使用金字塔进行搜索
+                    cv::calcOpticalFlowPyrLK(prev_img, cur_img, prev_pts, cur_pts, status, err, cv::Size(21, 21), 3);
+            } else
+                cv::calcOpticalFlowPyrLK(prev_img, cur_img, prev_pts, cur_pts, status, err, cv::Size(21, 21), 3);
+            // reverse check
+            if (FLOW_BACK)
+            {
+                vector <uchar> reverse_status;
+                vector <cv::Point2f> reverse_pts = prev_pts;
+                cv::calcOpticalFlowPyrLK(cur_img, prev_img, cur_pts, reverse_pts, reverse_status, err, cv::Size(21, 21),
+                                         1,
+                                         cv::TermCriteria(cv::TermCriteria::COUNT + cv::TermCriteria::EPS, 30, 0.01),
+                                         cv::OPTFLOW_USE_INITIAL_FLOW);
+                //cv::calcOpticalFlowPyrLK(cur_img, prev_img, cur_pts, reverse_pts, reverse_status, err, cv::Size(21, 21), 3);
+                for (size_t i = 0; i < status.size(); i++) {
+                    //如果前后都能找到，并且找到的点的距离小于0.5
+                    if (status[i] && reverse_status[i] && distance(prev_pts[i], reverse_pts[i]) <= 0.5) {
+                        status[i] = 1;
+                    } else
+                        status[i] = 0;
+                }
             }
-            if (succ_num < 10)//小于10时，使用金字塔进行搜索
-               cv::calcOpticalFlowPyrLK(prev_img, cur_img, prev_pts, cur_pts, status, err, cv::Size(21, 21), 3);
+            ROS_DEBUG("temporal optical flow costs: %fms", t_o.toc());
         }
         else
-            cv::calcOpticalFlowPyrLK(prev_img, cur_img, prev_pts, cur_pts, status, err, cv::Size(21, 21), 3);
-        // reverse check
-        if(FLOW_BACK)
         {
-            vector<uchar> reverse_status;
-            vector<cv::Point2f> reverse_pts = prev_pts;
-            cv::calcOpticalFlowPyrLK(cur_img, prev_img, cur_pts, reverse_pts, reverse_status, err, cv::Size(21, 21), 1, 
-            cv::TermCriteria(cv::TermCriteria::COUNT+cv::TermCriteria::EPS, 30, 0.01), cv::OPTFLOW_USE_INITIAL_FLOW);
-            //cv::calcOpticalFlowPyrLK(cur_img, prev_img, cur_pts, reverse_pts, reverse_status, err, cv::Size(21, 21), 3); 
-            for(size_t i = 0; i < status.size(); i++)
+            TicToc t_og;
+            cv::cuda::GpuMat prev_gpu_img(prev_img);
+            cv::cuda::GpuMat cur_gpu_img(cur_img);
+            cv::cuda::GpuMat prev_gpu_pts(prev_pts);
+            cv::cuda::GpuMat cur_gpu_pts(cur_pts);
+            cv::cuda::GpuMat gpu_status;
+            if(hasPrediction)
             {
-                //如果前后都能找到，并且找到的点的距离小于0.5
-                if(status[i] && reverse_status[i] && distance(prev_pts[i], reverse_pts[i]) <= 0.5)
+                cur_gpu_pts = cv::cuda::GpuMat(predict_pts);
+                cv::Ptr<cv::cuda::SparsePyrLKOpticalFlow> d_pyrLK_sparse = cv::cuda::SparsePyrLKOpticalFlow::create(
+                        cv::Size(21, 21), 1, 30, true);
+                d_pyrLK_sparse->calc(prev_gpu_img, cur_gpu_img, prev_gpu_pts, cur_gpu_pts, gpu_status);
+
+                vector<cv::Point2f> tmp_cur_pts(cur_gpu_pts.cols);
+                cur_gpu_pts.download(tmp_cur_pts);
+                cur_pts = tmp_cur_pts;
+
+                vector<uchar> tmp_status(gpu_status.cols);
+                gpu_status.download(tmp_status);
+                status = tmp_status;
+
+                int succ_num = 0;
+                for (size_t i = 0; i < tmp_status.size(); i++)
                 {
-                    status[i] = 1;
+                    if (tmp_status[i])
+                        succ_num++;
                 }
-                else
-                    status[i] = 0;
+                if (succ_num < 10)
+                {
+                    cv::Ptr<cv::cuda::SparsePyrLKOpticalFlow> d_pyrLK_sparse = cv::cuda::SparsePyrLKOpticalFlow::create(
+                            cv::Size(21, 21), 3, 30, false);
+                    d_pyrLK_sparse->calc(prev_gpu_img, cur_gpu_img, prev_gpu_pts, cur_gpu_pts, gpu_status);
+
+                    vector<cv::Point2f> tmp1_cur_pts(cur_gpu_pts.cols);
+                    cur_gpu_pts.download(tmp1_cur_pts);
+                    cur_pts = tmp1_cur_pts;
+
+                    vector<uchar> tmp1_status(gpu_status.cols);
+                    gpu_status.download(tmp1_status);
+                    status = tmp1_status;
+                }
             }
+            else
+            {
+                cv::Ptr<cv::cuda::SparsePyrLKOpticalFlow> d_pyrLK_sparse = cv::cuda::SparsePyrLKOpticalFlow::create(
+                        cv::Size(21, 21), 3, 30, false);
+                d_pyrLK_sparse->calc(prev_gpu_img, cur_gpu_img, prev_gpu_pts, cur_gpu_pts, gpu_status);
+
+                vector<cv::Point2f> tmp1_cur_pts(cur_gpu_pts.cols);
+                cur_gpu_pts.download(tmp1_cur_pts);
+                cur_pts = tmp1_cur_pts;
+
+                vector<uchar> tmp1_status(gpu_status.cols);
+                gpu_status.download(tmp1_status);
+                status = tmp1_status;
+            }
+            if(FLOW_BACK)
+            {
+                cv::cuda::GpuMat reverse_gpu_status;
+                cv::cuda::GpuMat reverse_gpu_pts = prev_gpu_pts;
+                cv::Ptr<cv::cuda::SparsePyrLKOpticalFlow> d_pyrLK_sparse = cv::cuda::SparsePyrLKOpticalFlow::create(
+                        cv::Size(21, 21), 1, 30, true);
+                d_pyrLK_sparse->calc(cur_gpu_img, prev_gpu_img, cur_gpu_pts, reverse_gpu_pts, reverse_gpu_status);
+
+                vector<cv::Point2f> reverse_pts(reverse_gpu_pts.cols);
+                reverse_gpu_pts.download(reverse_pts);
+
+                vector<uchar> reverse_status(reverse_gpu_status.cols);
+                reverse_gpu_status.download(reverse_status);
+
+                for(size_t i = 0; i < status.size(); i++)
+                {
+                    if(status[i] && reverse_status[i] && distance(prev_pts[i], reverse_pts[i]) <= 0.5)
+                    {
+                        status[i] = 1;
+                    }
+                    else
+                        status[i] = 0;
+                }
+            }
+//            ROS_DEBUG("temporal optical flow costs: %fms", t_o.toc());
         }
-        
+
         for (int i = 0; i < int(cur_pts.size()); i++)
             if (status[i] && !inBorder(cur_pts[i]))// 如果这个点不在图像内，则剔除
                 status[i] = 0;
@@ -164,7 +261,6 @@ map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> FeatureTracker::trackIm
         reduceVector(cur_pts, status);
         reduceVector(ids, status);
         reduceVector(track_cnt, status);
-        ROS_DEBUG("temporal optical flow costs: %fms", t_o.toc());
         //printf("track cnt %d\n", (int)ids.size());
     }
 
@@ -177,38 +273,73 @@ map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> FeatureTracker::trackIm
         ROS_DEBUG("set mask begins");
         TicToc t_m;
         setMask();
-        ROS_DEBUG("set mask costs %fms", t_m.toc());
-
+        // ROS_DEBUG("set mask costs %fms", t_m.toc());
+        // printf("set mask costs %fms\n", t_m.toc());
         ROS_DEBUG("detect feature begins");
-        TicToc t_t;
-        // 如果当前图像的特征点cur_pts数目小于规定的最大特征点数目MAX_CNT，则进行提取
+
         int n_max_cnt = MAX_CNT - static_cast<int>(cur_pts.size());
-        if (n_max_cnt > 0)
+        if(!USE_GPU)
         {
-            if(mask.empty())
-                cout << "mask is empty " << endl;
-            if (mask.type() != CV_8UC1)
-                cout << "mask type wrong " << endl;
-            cv::goodFeaturesToTrack(cur_img, n_pts, MAX_CNT - cur_pts.size(), 0.01, MIN_DIST, mask);
+            if (n_max_cnt > 0)
+            {
+                TicToc t_t;
+                if(mask.empty())
+                    cout << "mask is empty " << endl;
+                if (mask.type() != CV_8UC1)
+                    cout << "mask type wrong " << endl;
+                cv::goodFeaturesToTrack(cur_img, n_pts, MAX_CNT - cur_pts.size(), 0.01, MIN_DIST, mask);
+                // printf("good feature to track costs: %fms\n", t_t.toc());
+                std::cout << "n_pts size: "<< n_pts.size()<<std::endl;
+            }
+            else
+                n_pts.clear();
+            // sum_n += n_pts.size();
+            // printf("total point from non-gpu: %d\n",sum_n);
         }
+
+            // ROS_DEBUG("detect feature costs: %fms", t_t.toc());
+            // printf("good feature to track costs: %fms\n", t_t.toc());
         else
-            n_pts.clear();
-        ROS_DEBUG("detect feature costs: %f ms", t_t.toc());
-        // 对于所有新提取出来的特征点，加入到cur_pts
-        for (auto &p : n_pts)
         {
-            cur_pts.push_back(p);
-            ids.push_back(n_id++);
-            track_cnt.push_back(1);
+            if (n_max_cnt > 0)
+            {
+                if(mask.empty())
+                    cout << "mask is empty " << endl;
+                if (mask.type() != CV_8UC1)
+                    cout << "mask type wrong " << endl;
+                TicToc t_g;
+                cv::cuda::GpuMat cur_gpu_img(cur_img);
+                cv::cuda::GpuMat d_prevPts;
+                TicToc t_gg;
+                cv::cuda::GpuMat gpu_mask(mask);
+                // printf("gpumat cost: %fms\n",t_gg.toc());
+                cv::Ptr<cv::cuda::CornersDetector> detector = cv::cuda::createGoodFeaturesToTrackDetector(cur_gpu_img.type(), MAX_CNT - cur_pts.size(), 0.01, MIN_DIST);
+                // cout << "new gpu points: "<< MAX_CNT - cur_pts.size()<<endl;
+                detector->detect(cur_gpu_img, d_prevPts, gpu_mask);
+                // std::cout << "d_prevPts size: "<< d_prevPts.size()<<std::endl;
+                if(!d_prevPts.empty())
+                    n_pts = cv::Mat_<cv::Point2f>(cv::Mat(d_prevPts));
+                else
+                    n_pts.clear();
+                // sum_n += n_pts.size();
+                // printf("total point from gpu: %d\n",sum_n);
+                // printf("gpu good feature to track cost: %fms\n", t_g.toc());
+            }
+            else
+                n_pts.clear();
         }
-        //printf("feature cnt after add %d\n", (int)ids.size());
+
+        ROS_DEBUG("add feature begins");
+        TicToc t_a;
+        addPoints();
+        // ROS_DEBUG("selectFeature costs: %fms", t_a.toc());
+        // printf("selectFeature costs: %fms\n", t_a.toc());
     }
 
     cur_un_pts = undistortedPts(cur_pts, m_camera[0]);
     pts_velocity = ptsVelocity(ids, cur_un_pts, cur_un_pts_map, prev_un_pts_map);
     //如果是双目
     if(!_img1.empty() && stereo_cam)
-        // 把左目的点在右目上找到，然后计算右目上的像素速度。
     {
         ids_right.clear();
         cur_right_pts.clear();
@@ -218,39 +349,74 @@ map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> FeatureTracker::trackIm
         if(!cur_pts.empty())
         {
             //printf("stereo image; track feature on right image\n");
+
             vector<cv::Point2f> reverseLeftPts;
             vector<uchar> status, statusRightLeft;
-            vector<float> err;
-            // cur left ---- cur right
-            /*光流跟踪是在左右两幅图像之间进行cur left ---- cur right
-            prevImg	第一幅8位输入图像 或 由buildOpticalFlowPyramid()构造的金字塔。
-            nextImg	第二幅与preImg大小和类型相同的输入图像或金字塔。
-            prevPts	光流法需要找到的二维点的vector。点坐标必须是单精度浮点数。
-            nextPts	可以作为输入，也可以作为输出。包含输入特征在第二幅图像中计算出的新位置的二维点（单精度浮点坐标）的输出vector。当使用OPTFLOW_USE_INITIAL_FLOW 标志时，nextPts的vector必须与input的大小相同。
-            status	输出状态vector(类型：unsigned chars)。如果找到了对应特征的流，则将向量的每个元素设置为1；否则，置0。
-            err	误差输出vector。vector的每个元素被设置为对应特征的误差，可以在flags参数中设置误差度量的类型；如果没有找到流，则未定义误差（使用status参数来查找此类情况）。
-            winSize	每级金字塔的搜索窗口大小。
-            maxLevel	基于最大金字塔层次数。如果设置为0，则不使用金字塔（单级）；如果设置为1，则使用两个级别，等等。如果金字塔被传递到input，那么算法使用的级别与金字塔同级别但不大于MaxLevel。
-            criteria	指定迭代搜索算法的终止准则（在指定的最大迭代次数标准值（criteria.maxCount）之后，或者当搜索窗口移动小于criteria.epsilon。）
-            flags 操作标志，可选参数：
-            OPTFLOW_USE_INITIAL_FLOW：使用初始估计，存储在nextPts中；如果未设置标志，则将prevPts复制到nextPts并被视为初始估计。
-            OPTFLOW_LK_GET_MIN_EIGENVALS：使用最小本征值作为误差度量（见minEigThreshold描述）；如果未设置标志，则将原始周围的一小部分和移动的点之间的 L1 距离除以窗口中的像素数，作为误差度量。
-            minEigThreshold
-            算法所计算的光流方程的2x2标准矩阵的最小本征值（该矩阵称为[Bouguet00]中的空间梯度矩阵）÷ 窗口中的像素数。如果该值小于MinEigThreshold，则过滤掉相应的特征，相应的流也不进行处理。因此可以移除不好的点并提升性能。 */
-            cv::calcOpticalFlowPyrLK(cur_img, rightImg, cur_pts, cur_right_pts, status, err, cv::Size(21, 21), 3);
-            // reverse check cur right ---- cur left
-            if(FLOW_BACK)
+            if(!USE_GPU_ACC_FLOW)
             {
-                cv::calcOpticalFlowPyrLK(rightImg, cur_img, cur_right_pts, reverseLeftPts, statusRightLeft, err, cv::Size(21, 21), 3);
-                for(size_t i = 0; i < status.size(); i++)
+                TicToc t_check;
+                vector<float> err;
+                // cur left ---- cur right
+                cv::calcOpticalFlowPyrLK(cur_img, rightImg, cur_pts, cur_right_pts, status, err, cv::Size(21, 21), 3);
+                // reverse check cur right ---- cur left
+                if(FLOW_BACK)
                 {
-                    if(status[i] && statusRightLeft[i] && inBorder(cur_right_pts[i]) && distance(cur_pts[i], reverseLeftPts[i]) <= 0.5)
-                        status[i] = 1;
-                    else
-                        status[i] = 0;
+                    cv::calcOpticalFlowPyrLK(rightImg, cur_img, cur_right_pts, reverseLeftPts, statusRightLeft, err, cv::Size(21, 21), 3);
+                    for(size_t i = 0; i < status.size(); i++)
+                    {
+                        if(status[i] && statusRightLeft[i] && inBorder(cur_right_pts[i]) && distance(cur_pts[i], reverseLeftPts[i]) <= 0.5)
+                            status[i] = 1;
+                        else
+                            status[i] = 0;
+                    }
                 }
+                // printf("left right optical flow cost %fms\n",t_check.toc());
             }
+            else
+            {
+                TicToc t_og1;
+                cv::cuda::GpuMat cur_gpu_img(cur_img);
+                cv::cuda::GpuMat right_gpu_Img(rightImg);
+                cv::cuda::GpuMat cur_gpu_pts(cur_pts);
+                cv::cuda::GpuMat cur_right_gpu_pts;
+                cv::cuda::GpuMat gpu_status;
+                cv::Ptr<cv::cuda::SparsePyrLKOpticalFlow> d_pyrLK_sparse = cv::cuda::SparsePyrLKOpticalFlow::create(
+                        cv::Size(21, 21), 3, 30, false);
+                d_pyrLK_sparse->calc(cur_gpu_img, right_gpu_Img, cur_gpu_pts, cur_right_gpu_pts, gpu_status);
 
+                vector<cv::Point2f> tmp_cur_right_pts(cur_right_gpu_pts.cols);
+                cur_right_gpu_pts.download(tmp_cur_right_pts);
+                cur_right_pts = tmp_cur_right_pts;
+
+                vector<uchar> tmp_status(gpu_status.cols);
+                gpu_status.download(tmp_status);
+                status = tmp_status;
+
+                if(FLOW_BACK)
+                {
+                    cv::cuda::GpuMat reverseLeft_gpu_Pts;
+                    cv::cuda::GpuMat status_gpu_RightLeft;
+                    cv::Ptr<cv::cuda::SparsePyrLKOpticalFlow> d_pyrLK_sparse = cv::cuda::SparsePyrLKOpticalFlow::create(
+                            cv::Size(21, 21), 3, 30, false);
+                    d_pyrLK_sparse->calc(right_gpu_Img, cur_gpu_img, cur_right_gpu_pts, reverseLeft_gpu_Pts, status_gpu_RightLeft);
+
+                    vector<cv::Point2f> tmp_reverseLeft_Pts(reverseLeft_gpu_Pts.cols);
+                    reverseLeft_gpu_Pts.download(tmp_reverseLeft_Pts);
+                    reverseLeftPts = tmp_reverseLeft_Pts;
+
+                    vector<uchar> tmp1_status(status_gpu_RightLeft.cols);
+                    status_gpu_RightLeft.download(tmp1_status);
+                    statusRightLeft = tmp1_status;
+                    for(size_t i = 0; i < status.size(); i++)
+                    {
+                        if(status[i] && statusRightLeft[i] && inBorder(cur_right_pts[i]) && distance(cur_pts[i], reverseLeftPts[i]) <= 0.5)
+                            status[i] = 1;
+                        else
+                            status[i] = 0;
+                    }
+                }
+                // printf("gpu left right optical flow cost %fms\n",t_og1.toc());
+            }
             ids_right = ids;
             reduceVector(cur_right_pts, status);
             reduceVector(ids_right, status);
@@ -264,6 +430,7 @@ map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> FeatureTracker::trackIm
             */
             cur_un_right_pts = undistortedPts(cur_right_pts, m_camera[1]);
             right_pts_velocity = ptsVelocity(ids_right, cur_un_right_pts, cur_un_right_pts_map, prev_un_right_pts_map);
+
         }
         prev_un_right_pts_map = cur_un_right_pts_map;
     }

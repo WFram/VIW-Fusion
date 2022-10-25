@@ -67,6 +67,8 @@ int USE_WHEEL;
 int USE_PLANE;
 int ONLY_INITIAL_WITH_WHEEL;
 int MULTIPLE_THREAD;
+int USE_GPU;
+int USE_GPU_ACC_FLOW;
 map<int, Eigen::Vector3d> pts_gt;
 std::string IMAGE0_TOPIC, IMAGE1_TOPIC;
 std::string FEATURE0_TOPIC, FEATURE1_TOPIC;
@@ -127,6 +129,14 @@ void readParameters(std::string config_file)
     FLOW_BACK = fsSettings["flow_back"];
 
     MULTIPLE_THREAD = fsSettings["multiple_thread"];
+
+    USE_GPU = fsSettings["use_gpu"];
+    USE_GPU_ACC_FLOW = fsSettings["use_gpu_acc_flow"];
+
+    if (USE_GPU)
+        printf("GPU enabled");
+    if (USE_GPU_ACC_FLOW)
+        printf("GPU flow acceleration enabled");
 
     // It affects:
     //      1) whether to read IMU related parameters (see below), including topic name

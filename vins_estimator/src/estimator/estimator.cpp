@@ -115,6 +115,21 @@ void Estimator::clearState()
     frame_count = 0;
     solver_flag = INITIAL;
     initial_timestamp = 0;
+
+    for (auto &it : all_image_frame)
+    {
+        if (it.second.pre_integration != NULL)
+        {
+            delete it.second.pre_integration;
+            it.second.pre_integration = NULL;
+        }
+        if (it.second.pre_integration_wheel != NULL)
+        {
+            delete it.second.pre_integration_wheel;
+            it.second.pre_integration_wheel = NULL;
+        }
+    }
+
     all_image_frame.clear();
 
     if (tmp_pre_integration != nullptr)
@@ -198,7 +213,7 @@ void Estimator::changeSensorType(int use_imu, int use_stereo)
                 last_marginalization_parameter_blocks.clear();
             }
         }
-        
+
         STEREO = use_stereo;
         printf("use imu %d use stereo %d\n", USE_IMU, STEREO);
     }
@@ -230,9 +245,9 @@ void Estimator::inputImage(double t, const cv::Mat &img, const cv::Mat &_img1)
         cv::Mat imgTrack = featureTracker.getTrackImage();
         pubTrackImage(imgTrack, t);
     }
-    
+
     if(MULTIPLE_THREAD)
-    {     
+    {
         if(inputImageCnt % 2 == 0)
         {
             mBuf.lock();
@@ -249,7 +264,7 @@ void Estimator::inputImage(double t, const cv::Mat &img, const cv::Mat &_img1)
         processMeasurements();
         printf("process time: %f\n", processTime.toc());
     }
-    
+
 }
 void Estimator::inputFeature(double t, const vector<cv::Point2f>& _features0, const vector<cv::Point2f>& _features1)
 {
@@ -355,7 +370,7 @@ void Estimator::inputFeature(double t, const map<int, vector<pair<int, Eigen::Ma
 }
 
 
-bool Estimator::getIMUInterval(double t0, double t1, vector<pair<double, Eigen::Vector3d>> &accVector, 
+bool Estimator::getIMUInterval(double t0, double t1, vector<pair<double, Eigen::Vector3d>> &accVector,
                                 vector<pair<double, Eigen::Vector3d>> &gyrVector)
 {
     if(accBuf.empty())
@@ -632,7 +647,7 @@ void Estimator::processIMU(double t, double dt, const Vector3d &linear_accelerat
         Vs[j] += dt * un_acc;
     }
     acc_0 = linear_acceleration;
-    gyr_0 = angular_velocity; 
+    gyr_0 = angular_velocity;
 }
 void Estimator::processWheel(double t, double dt, const Vector3d &linear_velocity, const Vector3d &angular_velocity)
 {
@@ -751,7 +766,7 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
                 if(ESTIMATE_EXTRINSIC != 2 && (header - initial_timestamp) > 0.1)
                 {
                     result = initialStructure();
-                    initial_timestamp = header;   
+                    initial_timestamp = header;
                 }
                 if(result)
                 {
@@ -872,7 +887,7 @@ ROS_DEBUG("Initialization finish!");
                 featureTracker.removeOutliers(removeIndex); //若路标点为外点，则对前端图像跟踪部分的信息进行剔除更新;主要包括prev_pts, ids， track_cnt
             predictPtsInNextFrame(); //预测路标点在下一时刻左图中的坐标，基于恒速模型
         }
-            
+
         ROS_DEBUG("solver costs: %fms", t_solve.toc());
 
         if (failureDetection())//默认直接返回false，具体判定失败的条件可根据具体场景修正
@@ -977,7 +992,7 @@ bool Estimator::initialStructure()
             tmp_feature.observation.push_back(make_pair(imu_j, Eigen::Vector2d{pts_j.x(), pts_j.y()})); //构建路标点在左相机图像坐标系下的观测（去畸变）
         }
         sfm_f.push_back(tmp_feature);
-    } 
+    }
     Matrix3d relative_R;
     Vector3d relative_T;
     int l;
@@ -1043,7 +1058,7 @@ bool Estimator::initialStructure()
                 }
             }
         }
-        cv::Mat K = (cv::Mat_<double>(3, 3) << 1, 0, 0, 0, 1, 0, 0, 0, 1);     
+        cv::Mat K = (cv::Mat_<double>(3, 3) << 1, 0, 0, 0, 1, 0, 0, 0, 1);
         if(pts_3_vector.size() < 6)
         {
             cout << "pts_3_vector size " << pts_3_vector.size() << endl;
@@ -1315,7 +1330,7 @@ void Estimator::double2vector()
         {
 
             Rs[i] = rot_diff * Quaterniond(para_Pose[i][6], para_Pose[i][3], para_Pose[i][4], para_Pose[i][5]).normalized().toRotationMatrix();
-            
+
             Ps[i] = rot_diff * Vector3d(para_Pose[i][0] - para_Pose[0][0],
                                     para_Pose[i][1] - para_Pose[0][1],
                                     para_Pose[i][2] - para_Pose[0][2]) + origin_P0;
@@ -1332,7 +1347,7 @@ void Estimator::double2vector()
                 Bgs[i] = Vector3d(para_SpeedBias[i][6],
                                   para_SpeedBias[i][7],
                                   para_SpeedBias[i][8]);
-            
+
         }
     }
     else
@@ -1340,7 +1355,7 @@ void Estimator::double2vector()
         for (int i = 0; i <= WINDOW_SIZE; i++)
         {
             Rs[i] = Quaterniond(para_Pose[i][6], para_Pose[i][3], para_Pose[i][4], para_Pose[i][5]).normalized().toRotationMatrix();
-            
+
             Ps[i] = Vector3d(para_Pose[i][0], para_Pose[i][1], para_Pose[i][2]);
         }
     }
@@ -1445,29 +1460,39 @@ void Estimator::optimization()
     TicToc t_whole, t_prepare;
     vector2double();
 
+    // Constructing the optimization problem
     ceres::Problem problem;
+
+    // 1. Define a loss function (kernel)
     ceres::LossFunction *loss_function;
     //loss_function = NULL;
     loss_function = new ceres::HuberLoss(1.0);
     //loss_function = new ceres::CauchyLoss(1.0 / FOCAL_LENGTH);
     //ceres::LossFunction* loss_function = new ceres::HuberLoss(1.0);
+    // 2. Add nodes (frame poses, velocities, biases, spatial and temporal intrinsic, extrinsic
     for (int i = 0; i < frame_count + 1; i++)
     {
+        // Since rotation matrices and quaternions don't support general addition operation we need to define those
+        // operators
+        // By doing this, we inform how to perform plus operation for two poses and how to compute the Jacobian
         ceres::LocalParameterization *local_parameterization = new PoseLocalParameterization();
         problem.AddParameterBlock(para_Pose[i], SIZE_POSE, local_parameterization);
         if(USE_IMU)
             problem.AddParameterBlock(para_SpeedBias[i], SIZE_SPEEDBIAS);
     }
     //TODO 为什么有IMU就不需要固定第一帧位姿
+    // Fix the first node
     if(!USE_IMU)
         problem.SetParameterBlockConstant(para_Pose[0]);
 
+    // Add the extrinsic as the nodes, if needed
     for (int i = 0; i < NUM_OF_CAM; i++)
     {
 //        ceres::LocalParameterization *local_parameterization = new PoseLocalParameterization();
         ceres::LocalParameterization *local_parameterization;
         if(ESTIMATE_EXTRINSIC) {
             // 固定某些量
+            // Depends on what we exactly would like to calibrate
             switch (CAM_EXT_ADJ_TYPE) {
                 case CameraExtrinsicAdjustType::ADJUST_CAM_NO_Z:
                     local_parameterization = new PoseSubsetParameterization({2, 6});
@@ -1496,10 +1521,15 @@ void Estimator::optimization()
         else
         {
             //ROS_INFO("fix extinsic param");
+            // We fix extrinsic nodes when at least one case of following is satisfied:
+            // 1. We don't need to estimate extrinsic
+            // 2. We accumulated enough frames in the window (filled the window)
+            // 3. The velocity is enough
             problem.SetParameterBlockConstant(para_Ex_Pose[i]);
         }
     }
 
+    // Add wheel intrinsic and extrinsic nodes
     if(USE_WHEEL && !ONLY_INITIAL_WITH_WHEEL){
 //        ceres::LocalParameterization *local_parameterization = new PoseLocalParameterization();
 
@@ -1547,12 +1577,14 @@ void Estimator::optimization()
         else
         {
             //ROS_INFO("fix extinsic param");
+            // TODO: why? maybe we should consider, for example, vx and fix the sx depending on it?
             problem.SetParameterBlockConstant(para_Ix_sx_wheel[0]);
             problem.SetParameterBlockConstant(para_Ix_sy_wheel[0]);
             problem.SetParameterBlockConstant(para_Ix_sw_wheel[0]);
         }
     }
 
+    // Add plane intrinsic nodes
     if(USE_PLANE){
         ceres::LocalParameterization *local_parameterization = new OrientationSubsetParameterization(std::vector<int>{2});
         problem.AddParameterBlock(para_plane_R[0], SIZE_ROTATION, local_parameterization);
@@ -1574,10 +1606,15 @@ void Estimator::optimization()
     problem.AddParameterBlock(para_Td[0], 1);
     problem.AddParameterBlock(para_Td_wheel[0], 1);
     //TODO 为什么判断 Vs[0].norm() < 0.2
+
+    // We don't estimate time shift if the velocity is not enough
     if (!ESTIMATE_TD || Vs[0].norm() < 0.2)
         problem.SetParameterBlockConstant(para_Td[0]);
     if (!ESTIMATE_TD_WHEEL || Vs[0].norm() < 0.2)
         problem.SetParameterBlockConstant(para_Td_wheel[0]);
+
+    // 3. Add constrains
+    // Add prior constraint
     if (last_marginalization_info && last_marginalization_info->valid)
     {
         // construct new marginlization_factor
@@ -1644,25 +1681,33 @@ void Estimator::optimization()
 
     int f_m_cnt = 0;
     int feature_index = -1;
+    // Here we iterate features in the sliding window
+    // The aim here is iterate all the features and create triple edges between two nodes and a landmark
     for (auto &it_per_id : f_manager.feature)
     {
         it_per_id.used_num = it_per_id.feature_per_frame.size();
+        // TODO: Consider as not reliable. Let's check how it may affect. Maybe it's better to increase the window
+        //       size and require more observations for a point
         if (it_per_id.used_num < 4)
             continue;
- 
+
         ++feature_index;
 
         int imu_i = it_per_id.start_frame, imu_j = imu_i - 1;
-        
+
+        // We have a sliding window. Hence, feature_per_frame[0] corresponds to the coordinates of the feature with
+        // id it_per_id in the first frame, when the feature observed in the window
         Vector3d pts_i = it_per_id.feature_per_frame[0].point;
 
         for (auto &it_per_frame : it_per_id.feature_per_frame)
         {
             imu_j++;
             //每个具有共视关系的帧都会形成因子
+            // It shouldn't happen, because otherwise repr error will be zero
             if (imu_i != imu_j)
             {
                 Vector3d pts_j = it_per_frame.point;
+                // Velocities and time shift needed to expand the residual (consider the time offset)
                 ProjectionTwoFrameOneCamFactor *f_td = new ProjectionTwoFrameOneCamFactor(pts_i, pts_j, it_per_id.feature_per_frame[0].velocity, it_per_frame.velocity,
                                                                  it_per_id.feature_per_frame[0].cur_td, it_per_frame.cur_td);
                 problem.AddResidualBlock(f_td, loss_function, para_Pose[imu_i], para_Pose[imu_j], para_Ex_Pose[0], para_Feature[feature_index], para_Td[0]);
@@ -1677,7 +1722,7 @@ void Estimator::optimization()
             }
             //双目情况，还会与具有共视关系的帧的右目形成因子
             if(STEREO && it_per_frame.is_stereo)
-            {                
+            {
                 Vector3d pts_j_right = it_per_frame.pointRight;
                 if(imu_i != imu_j)
                 {
@@ -1691,7 +1736,7 @@ void Estimator::optimization()
                                                                  it_per_id.feature_per_frame[0].cur_td, it_per_frame.cur_td);
                     problem.AddResidualBlock(f, loss_function, para_Ex_Pose[0], para_Ex_Pose[1], para_Feature[feature_index], para_Td[0]);
                 }
-               
+
             }
             f_m_cnt++;
         }
@@ -1842,7 +1887,7 @@ void Estimator::optimization()
         TicToc t_pre_margin;
         marginalization_info->preMarginalize();
         ROS_DEBUG("pre marginalization %f ms", t_pre_margin.toc());
-        
+
         TicToc t_margin;
         marginalization_info->marginalize();
         ROS_DEBUG("marginalization %f ms", t_margin.toc());
@@ -1874,7 +1919,7 @@ void Estimator::optimization()
             delete last_marginalization_info;
         last_marginalization_info = marginalization_info;
         last_marginalization_parameter_blocks = parameter_blocks;
-        
+
     }
     else //将次新的图像帧数据边缘化
     {
@@ -1911,7 +1956,7 @@ void Estimator::optimization()
             ROS_DEBUG("begin marginalization");
             marginalization_info->marginalize();
             ROS_DEBUG("end marginalization, %f ms", t_margin.toc());
-            
+
             std::unordered_map<long, double *> addr_shift;
             for (int i = 0; i <= WINDOW_SIZE; i++)
             {
@@ -1942,13 +1987,13 @@ void Estimator::optimization()
             addr_shift[reinterpret_cast<long>(para_Td[0])] = para_Td[0];
             addr_shift[reinterpret_cast<long>(para_Td_wheel[0])] = para_Td_wheel[0];
 
-            
+
             vector<double *> parameter_blocks = marginalization_info->getParameterBlocks(addr_shift);
             if (last_marginalization_info)
                 delete last_marginalization_info;
             last_marginalization_info = marginalization_info;
             last_marginalization_parameter_blocks = parameter_blocks;
-            
+
         }
     }
     //printf("whole marginalization costs: %f \n", t_whole_marginalization.toc());
@@ -2029,10 +2074,19 @@ void Estimator::slideWindow()
             {
                 map<double, ImageFrame>::iterator it_0;
                 it_0 = all_image_frame.find(t_0);
-                delete it_0->second.pre_integration;
-                delete it_0->second.pre_integration_wheel;
+                for (map<double, ImageFrame>::iterator it = all_image_frame.begin(); it != it_0; ++it)
+                {
+                    delete it->second.pre_integration;
+                    delete it->second.pre_integration_wheel;
+                    it->second.pre_integration = NULL;
+                    it->second.pre_integration_wheel = NULL;
+                }
                 all_image_frame.erase(all_image_frame.begin(), it_0);
             }
+//                delete it_0->second.pre_integration;
+//                delete it_0->second.pre_integration_wheel;
+//                all_image_frame.erase(all_image_frame.begin(), it_0);
+//            }
             slideWindowOld();
         }
     }
@@ -2172,7 +2226,7 @@ void Estimator::predictPtsInNextFrame()
 }
 
 double Estimator::reprojectionError(Matrix3d &Ri, Vector3d &Pi, Matrix3d &rici, Vector3d &tici,
-                                 Matrix3d &Rj, Vector3d &Pj, Matrix3d &ricj, Vector3d &ticj, 
+                                 Matrix3d &Rj, Vector3d &Pj, Matrix3d &ricj, Vector3d &ticj,
                                  double depth, Vector3d &uvi, Vector3d &uvj)
 {
     Vector3d pts_w = Ri * (rici * (depth * uvi) + tici) + Pi;
@@ -2203,8 +2257,8 @@ void Estimator::outliersRejection(set<int> &removeIndex)
             imu_j++;
             if (imu_i != imu_j) //不同时刻，左相机在不同帧之间的重投影误差计算
             {
-                Vector3d pts_j = it_per_frame.point;             
-                double tmp_error = reprojectionError(Rs[imu_i], Ps[imu_i], ric[0], tic[0], 
+                Vector3d pts_j = it_per_frame.point;
+                double tmp_error = reprojectionError(Rs[imu_i], Ps[imu_i], ric[0], tic[0],
                                                     Rs[imu_j], Ps[imu_j], ric[0], tic[0],
                                                     depth, pts_i, pts_j);
                 err += tmp_error;
@@ -2214,11 +2268,11 @@ void Estimator::outliersRejection(set<int> &removeIndex)
             // need to rewrite projecton factor.........
             if(STEREO && it_per_frame.is_stereo) // 双目情形
             {
-                
+
                 Vector3d pts_j_right = it_per_frame.pointRight;
                 if(imu_i != imu_j) //不同时刻，左右图像帧之间的重投影误差
-                {            
-                    double tmp_error = reprojectionError(Rs[imu_i], Ps[imu_i], ric[0], tic[0], 
+                {
+                    double tmp_error = reprojectionError(Rs[imu_i], Ps[imu_i], ric[0], tic[0],
                                                         Rs[imu_j], Ps[imu_j], ric[1], tic[1],
                                                         depth, pts_i, pts_j_right);
                     err += tmp_error;
@@ -2227,13 +2281,13 @@ void Estimator::outliersRejection(set<int> &removeIndex)
                 }
                 else //相同时刻，左右图像帧之间的重投影误差 TODO(tzhang)：此处不同时刻判断没啥用，代码冗余
                 {
-                    double tmp_error = reprojectionError(Rs[imu_i], Ps[imu_i], ric[0], tic[0], 
+                    double tmp_error = reprojectionError(Rs[imu_i], Ps[imu_i], ric[0], tic[0],
                                                         Rs[imu_j], Ps[imu_j], ric[1], tic[1],
                                                         depth, pts_i, pts_j_right);
                     err += tmp_error;
                     errCnt++;
                     //printf("tmp_error %f\n", FOCAL_LENGTH / 1.5 * tmp_error);
-                }       
+                }
             }
         }
         double ave_err = err / errCnt;

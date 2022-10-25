@@ -54,13 +54,13 @@ public:
    * Creates the vocabulary by loading a file
    * @param filename
    */
-  TemplatedVocabulary(const std::string &filename);
+  TemplatedVocabulary(const std::string &filename, bool is_bin);
   
   /**
    * Creates the vocabulary by loading a file
    * @param filename
    */
-  TemplatedVocabulary(const char *filename);
+  TemplatedVocabulary(const char *filename, bool is_bin);
   
   /** 
    * Copy constructor
@@ -431,12 +431,15 @@ TemplatedVocabulary<TDescriptor,F>::TemplatedVocabulary
 
 template<class TDescriptor, class F>
 TemplatedVocabulary<TDescriptor,F>::TemplatedVocabulary
-  (const std::string &filename): m_scoring_object(NULL)
+  (const std::string &filename, bool is_bin): m_scoring_object(NULL)
 {
     //m_scoring = KL;
     // Changed by VINS [[[
     //printf("loop start load bin\n");
-    loadBin(filename);
+    if (is_bin)
+        loadBin(filename);
+    else
+        load(filename);
     // Changed by VINS ]]]
 }
 
@@ -444,12 +447,15 @@ TemplatedVocabulary<TDescriptor,F>::TemplatedVocabulary
 
 template<class TDescriptor, class F>
 TemplatedVocabulary<TDescriptor,F>::TemplatedVocabulary
-  (const char *filename): m_scoring_object(NULL)
+  (const char *filename, bool is_bin): m_scoring_object(NULL)
 {
     //m_scoring = KL;
     // Changed by VINS [[[
     //printf("loop start load bin\n");
-    loadBin(filename);
+    if (is_bin)
+        loadBin(filename);
+    else
+        load(filename);
     // Changed by VINS ]]]
 }
 

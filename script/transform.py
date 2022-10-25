@@ -27,6 +27,12 @@ def quat_to_rotation_matrix():
     print(r.as_matrix())
 
 
+def quat_to_euler():
+
+    r = R.from_quat([0.0, 0.0, -0.3609614606148754, 0.9325807332080026])
+    print(r.as_euler('zyx', degrees=False))
+
+
 if __name__ == '__main__':
-    quat_to_rotation_matrix()
+    quat_to_euler()
 

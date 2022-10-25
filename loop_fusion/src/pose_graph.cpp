@@ -53,12 +53,12 @@ void PoseGraph::setIMUFlag(bool _use_imu) {
 }
 
 void PoseGraph::loadVocabulary(std::string voc_path) {
-    voc = new BriefVocabulary(voc_path);
+    voc = new BriefVocabulary(voc_path, false);
     db.setVocabulary(*voc, false, 0);
 }
 
 void PoseGraph::addKeyFrame(KeyFrame *cur_kf, bool flag_detect_loop) {
-    printf("Adding keyframe");
+    // printf("Adding keyframe");
     //shift to base frame
     Vector3d vio_P_cur;
     Matrix3d vio_R_cur;
@@ -312,7 +312,7 @@ KeyFrame *PoseGraph::getKeyFrame(int index) {
 }
 
 int PoseGraph::detectLoop(KeyFrame *keyframe, int frame_index) {
-    printf("Detecting loop");
+    // printf("Detecting loop");
     // put image into image_pool; for visualization
     cv::Mat compressed_image;
     if (DEBUG_IMAGE) {
@@ -328,11 +328,11 @@ int PoseGraph::detectLoop(KeyFrame *keyframe, int frame_index) {
     TicToc t_query;
     db.query(keyframe->brief_descriptors, ret, 4, frame_index - 50);
     //printf("query time: %f", t_query.toc());
-    cout << "Searching for Image " << frame_index << ". " << ret << endl;
+    // cout << "Searching for Image " << frame_index << ". " << ret << endl;
 
     TicToc t_add;
     db.add(keyframe->brief_descriptors);
-    printf("add feature time: %f", t_add.toc());
+    // printf("add feature time: %f", t_add.toc());
     // ret[0] is the nearest neighbour's score. threshold change with neighour score
     bool find_loop = false;
     cv::Mat loop_result;

@@ -101,6 +101,8 @@ void image_callback(const sensor_msgs::ImageConstPtr &image_msg)
 {
     //ROS_INFO("image_callback!");
     m_buf.lock();
+    while (image_buf.size() > 10)
+        image_buf.pop();
     image_buf.push(image_msg);
     m_buf.unlock();
     //printf(" image time %f \n", image_msg->header.stamp.toSec());
@@ -120,6 +122,8 @@ void point_callback(const sensor_msgs::PointCloudConstPtr &point_msg)
 {
     //ROS_INFO("point_callback!");
     m_buf.lock();
+    while (point_buf.size() > 10)
+        point_buf.pop();
     point_buf.push(point_msg);
     m_buf.unlock();
     /*
@@ -176,6 +180,8 @@ void pose_callback(const nav_msgs::Odometry::ConstPtr &pose_msg)
 {
     //ROS_INFO("pose_callback!");
     m_buf.lock();
+    while (pose_buf.size() > 10)
+        pose_buf.pop();
     pose_buf.push(pose_msg);
     m_buf.unlock();
     /*
@@ -252,6 +258,8 @@ void process()
 
         // find out the messages with same time stamp
         m_buf.lock();
+        while (image_buf.size() > 10)
+            image_buf.pop();
         if(!image_buf.empty() && !point_buf.empty() && !pose_buf.empty())
         {
             if (image_buf.front()->header.stamp.toSec() > pose_buf.front()->header.stamp.toSec())
@@ -436,7 +444,9 @@ int main(int argc, char **argv)
     ROW = fsSettings["image_height"];
     COL = fsSettings["image_width"];
     std::string pkg_path = ros::package::getPath("loop_fusion");
-    string vocabulary_file = pkg_path + "/../support_files/brief_k10L6.bin";
+//    string vocabulary_file = pkg_path + "/../support_files/brief_k10L6.bin";
+// TODO: is converting to bin format needed?
+    string vocabulary_file = pkg_path + "/../support_files/brief_lite.voc.gz";
     cout << "vocabulary_file" << vocabulary_file << endl;
     posegraph.loadVocabulary(vocabulary_file);
 
@@ -481,7 +491,7 @@ int main(int argc, char **argv)
     }
 
     ros::Subscriber sub_vio = n.subscribe("/vins_estimator/odometry", 2000, vio_callback);
-    ros::Subscriber sub_image = n.subscribe(IMAGE_TOPIC, 2000, image_callback);
+    ros::Subscriber sub_image = n.subscribe(IMAGE_TOPIC, 10, image_callback);
     ros::Subscriber sub_pose = n.subscribe("/vins_estimator/keyframe_pose", 2000, pose_callback);
     ros::Subscriber sub_extrinsic = n.subscribe("/vins_estimator/extrinsic", 2000, extrinsic_callback);
     ros::Subscriber sub_point = n.subscribe("/vins_estimator/keyframe_point", 2000, point_callback);

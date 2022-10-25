@@ -3,8 +3,10 @@ project(vins)
 
 set(CMAKE_BUILD_TYPE "Release")
 set(CMAKE_CXX_FLAGS "-std=c++11")
+#set(CMAKE_CXX_FLAGS "-std=c++11 -O3 -Wall -g -march=native")
 #-DEIGEN_USE_MKL_ALL")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -Wall -g")
+#set(CMAKE_CXX_FLAGS_RELEASE "-std=c++11 -O3 -Wall -g -march=native")
 
 find_package(catkin REQUIRED COMPONENTS
     roscpp
@@ -16,7 +18,7 @@ find_package(catkin REQUIRED COMPONENTS
     camera_models
     image_transport
         rosbag)
-set(OpenCV_DIR "/usr/local/share/OpenCV")
+#set(OpenCV_DIR "/usr/local/share/OpenCV")
 find_package(OpenCV REQUIRED)
 
 message(WARNING "OpenCV_VERSION: ${OpenCV_VERSION}")

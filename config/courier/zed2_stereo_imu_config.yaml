@@ -17,10 +17,10 @@ image0_topic: "/zed2/zed_node/left/image_rect_color"
 image1_topic: "/zed2/zed_node/right/image_rect_color"
 output_path: "/home/wfram/viw_fusion_ws/src/VIW-Fusion/output"
 
-cam0_calib: "zed2_left_640x360.yaml"
+cam0_calib: "zed2_left_848x480.yaml"
 cam1_calib: "zed2_right.yaml"
-image_width: 640 # 1280
-image_height: 360
+image_width: 848 # 1280
+image_height: 480
 
 # Extrinsic parameter between IMU and Camera. # WF
 estimate_extrinsic: 0   # 0  Have an accurate extrinsic parameters. We will trust the following imu^R_cam, imu^T_cam, don't change it.
@@ -120,15 +120,19 @@ zpw_n: 0.05 # 0.05
 
 
 #Multiple thread support
-multiple_thread: 4
+multiple_thread: 1
+
+# GPU support
+use_gpu: 0
+use_gpu_acc_flow: 0
 
 #feature traker paprameters
 max_cnt: 150            # max feature number in feature tracking
 min_dist: 30            # min distance between two features 
 freq: 10                # frequence (Hz) of publish tracking result. At least 10Hz for good estimation. If set 0, the frequence will be same as raw image
 F_threshold: 1.0        # ransac threshold (pixel)
-show_track: 1           # publish tracking image as topic
-flow_back: 1            # perform forward and backward optical flow to improve feature tracking accuracy
+show_track: 0           # publish tracking image as topic
+flow_back: 0            # perform forward and backward optical flow to improve feature tracking accuracy
 
 #optimization parameters
 max_solver_time: 0.04  # max solver itration time (ms), to guarantee real time

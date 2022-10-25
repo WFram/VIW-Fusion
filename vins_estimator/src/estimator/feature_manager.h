@@ -25,6 +25,7 @@ using namespace Eigen;
 #include "parameters.h"
 #include "../utility/tic_toc.h"
 
+// Represent a feature, i.e. 7 attributes: u, v, X, Y, Z, vx, vy
 class FeaturePerFrame
 {
   public:
@@ -36,7 +37,9 @@ class FeaturePerFrame
         uv.x() = _point(3);
         uv.y() = _point(4);
         velocity.x() = _point(5); 
-        velocity.y() = _point(6); 
+        velocity.y() = _point(6);
+
+        // Timeshift for the feature
         cur_td = td;
         is_stereo = false;
     }
@@ -58,14 +61,24 @@ class FeaturePerFrame
     bool is_stereo;
 };
 
+
 class FeaturePerId
 {
   public:
     const int feature_id;
+
+    // The frame number where feature occurs first time
     int start_frame;
+
+    // These are the same features, but observed in diff frames
     vector<FeaturePerFrame> feature_per_frame;
+
+    // How many times it occur (was seen)
     int used_num;
+
+    // Inverse depth
     double estimated_depth;
+
     int solve_flag; // 0 haven't solve yet; 1 solve succ; 2 solve fail;
 
     FeaturePerId(int _feature_id, int _start_frame)
@@ -77,6 +90,7 @@ class FeaturePerId
     int endFrame();
 };
 
+// Stores all the feature in the current sliding window
 class FeatureManager
 {
   public:
@@ -102,7 +116,10 @@ class FeatureManager
     void removeBack();
     void removeFront(int frame_count);
     void removeOutlier(set<int> &outlierIndex);
+
+    // It stores all the features in the current sliding window
     list<FeaturePerId> feature;
+
     int last_track_num;
     double last_average_parallax;
     int new_feature_num;

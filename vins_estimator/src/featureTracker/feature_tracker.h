@@ -17,6 +17,9 @@
 #include <execinfo.h>
 #include <csignal>
 #include <opencv2/opencv.hpp>
+#include <opencv2/cudaoptflow.hpp>
+#include <opencv2/cudaimgproc.hpp>
+#include <opencv2/cudaarithm.hpp>
 #include <eigen3/Eigen/Dense>
 
 #include "camodocal/camera_models/CameraFactory.h"
@@ -40,6 +43,7 @@ public:
     map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> trackImage(double _cur_time, const cv::Mat &_img, const cv::Mat &_img1 = cv::Mat());
     map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> trackFeature(double _cur_time, const vector<cv::Point2f>& _features0, const vector<cv::Point2f>& _features1 = vector<cv::Point2f>());
     void setMask();
+    void addPoints();
     void readIntrinsicParameter(const vector<string> &calib_file);
     void showUndistortion(const string &name);
     void rejectWithF();
@@ -83,4 +87,5 @@ public:
     bool stereo_cam;
     int n_id;
     bool hasPrediction;
+    int sum_n;
 };

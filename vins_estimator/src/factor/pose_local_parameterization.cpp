@@ -9,9 +9,12 @@
 
 #include "pose_local_parameterization.h"
 
+// Seems like the solution is only because of necessity to normalize the quaternion
 bool PoseLocalParameterization::Plus(const double *x, const double *delta, double *x_plus_delta) const
 {
     Eigen::Map<const Eigen::Vector3d> _p(x);
+
+    // Shift by three memory cells according to its size (because that's how we get a quat)
     Eigen::Map<const Eigen::Quaterniond> _q(x + 3);
 
     Eigen::Map<const Eigen::Vector3d> dp(delta);

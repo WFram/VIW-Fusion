@@ -10,6 +10,8 @@ distortion_parameters:
    p1: 0.0
    p2: 0.0
 projection_parameters:
+   # fx: 266.015625
+   # fy: 354.6875
    fx: 532.03125
    fy: 532.03125
    cx: 319.944335938

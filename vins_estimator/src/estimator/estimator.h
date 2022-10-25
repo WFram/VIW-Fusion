@@ -169,6 +169,7 @@ class Estimator
     vector<Vector3d> linear_velocity_buf_wheel[(WINDOW_SIZE + 1)];
     vector<Vector3d> angular_velocity_buf_wheel[(WINDOW_SIZE + 1)];
 
+    // Updates only before reaching the window size
     int frame_count;
     int sum_of_outlier, sum_of_back, sum_of_front, sum_of_invalid;
     int inputImageCnt;
@@ -188,16 +189,28 @@ class Estimator
     double initial_timestamp;
 
 
+    // Pose of a frame in the window (7x1)
     double para_Pose[WINDOW_SIZE + 1][SIZE_POSE];
+
+    // Contains: vx, vy, vz, bax, bay, baz, bgx, bgy, bgz
     double para_SpeedBias[WINDOW_SIZE + 1][SIZE_SPEEDBIAS];
+
     double para_Feature[NUM_OF_F][SIZE_FEATURE];
+
+    // Extrinsic from the first cam to IMU and from the second cam to IMU
     double para_Ex_Pose[2][SIZE_POSE];
+
+    // Extrinsic from the first cam to odom frame
     double para_Ex_Pose_wheel[1][SIZE_POSE];
+
     double para_plane_R[1][SIZE_ROTATION];
     double para_plane_Z[1][1];
+
+    // Wheel intrinsic (just scalars)
     double para_Ix_sx_wheel[1][1];
     double para_Ix_sy_wheel[1][1];
     double para_Ix_sw_wheel[1][1];
+
     double para_Retrive_Pose[SIZE_POSE];
     double para_Td[1][1];
     double para_Td_wheel[1][1];

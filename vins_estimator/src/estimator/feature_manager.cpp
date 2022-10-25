@@ -48,7 +48,7 @@ int FeatureManager::getFeatureCount()
     return cnt;
 }
 
-
+// This function calculates parallax and adds features to the feature manager
 bool FeatureManager::addFeatureCheckParallax(int frame_count, const map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> &image, double td)
 {
     ROS_DEBUG("input feature: %d", (int)image.size());
@@ -63,20 +63,26 @@ bool FeatureManager::addFeatureCheckParallax(int frame_count, const map<int, vec
     {
         FeaturePerFrame f_per_fra(id_pts.second[0].second, td);
         assert(id_pts.second[0].first == 0);
+
+        // It works only for stereo case
         if(id_pts.second.size() == 2)
         {
             f_per_fra.rightObservation(id_pts.second[1].second);
             assert(id_pts.second[1].first == 1);
         }
 
+        // Take an id of a feature. If we find an already existing feature (the same id) in feature manager
         int feature_id = id_pts.first;
+        // It returns a pointer to FeaturePerId which was found (or not)
         auto it = find_if(feature.begin(), feature.end(), [feature_id](const FeaturePerId &it)
                           {
             return it.feature_id == feature_id;
                           });
 
+        // It means, we didn't find an existing feature
         if (it == feature.end())
         {
+            // frame_count is the number of frames in the current window (usually 10)
             feature.push_back(FeaturePerId(feature_id, frame_count));
             feature.back().feature_per_frame.push_back(f_per_fra);
             new_feature_num++;
