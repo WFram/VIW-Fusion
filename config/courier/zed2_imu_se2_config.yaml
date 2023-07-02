@@ -1,0 +1,138 @@
+%YAML:1.0
+
+#common parameters
+# TODO: check calibration params. When we use both IMU and wheels, the visualized frame is wrongly rotated. Not the
+#         case for single VIO/VWO setup
+imu: 0
+wheel: 1
+only_initial_with_wheel: 0  # Whether to use only wheels for initialization (no factor graph aided)
+plane: 0
+num_of_cam: 2
+
+imu_topic: "/zed2/zed_node/imu/data"
+wheel_topic: "/odom"
+image0_topic: "/zed2/zed_node/left/image_rect_color"
+image1_topic: "/zed2/zed_node/right/image_rect_color"
+output_path: "/home/wfram/robust_vins_ws/src/Robust-VINS/output"
+
+cam0_calib: "zed2_left_1280x720.yaml"
+cam1_calib: "zed2_right_1280x720.yaml"
+image_width: 1280
+image_height: 720
+
+#cam0_calib: "zed2_left_848x480.yaml"
+#cam1_calib: "zed2_right_848x480.yaml"
+#image_width: 848 # 1280
+#image_height: 480
+
+# Extrinsic parameter between IMU and Camera. # WF
+estimate_extrinsic: 0
+
+extrinsic_type: 3
+
+body_T_cam0: !!opencv-matrix
+  rows: 4
+  cols: 4
+  dt: d
+  # TODO: orientate so that the rotation is identity; translation is zero
+  data: [ 0., 0., 1., 0.,
+          -1., 0., 0., 0.,
+          0., -1., 0., 0.,
+          0., 0., 0., 1. ]
+#   data: [0.03758758, 0.0190846, 0.99911108, -0.01088468,
+#          -0.99906439, -0.02068303, 0.0379809, -0.00641469,
+#          0.02138949, -0.99960392, 0.01828932, 0.02625376,
+#          0., 0., 0., 1. ]
+
+body_T_cam1: !!opencv-matrix
+  rows: 4
+  cols: 4
+  dt: d
+
+  # b = 0.11837849 (from camera-info, when fx taken from here)
+  # -0.1303024 is chosen by the quality of alignment in Stereo VIWO mode -0.130024
+  data: [ 0., 0., 1., 0.,
+          -1., 0., 0., -0.130024,
+          0., -1., 0., 0.,
+          0., 0., 0., 1. ]
+#   data: [ 0.03758758, 0.0190846, 0.99911108, -0.01088468,
+#           -0.99906439, -0.02068303, 0.0379809, -0.130024, # -0.1263024
+#           0.02138949, -0.99960392, 0.01828932, 0.02625376,
+#           0., 0., 0., 1. ]
+
+#   data: [0.0375876, 0.0190846, 0.9991111, -0.0063742,
+#          -0.9990644, -0.0206830, 0.0379809, -0.1263024,
+#          0.0213895, -0.9996039, 0.0182893, 0.0288205,
+#          0., 0., 0., 1.]
+
+estimate_wheel_extrinsic: 0
+
+extrinsic_type_wheel: 3
+
+#wheel to body
+body_T_wheel: !!opencv-matrix
+  rows: 4
+  cols: 4
+  dt: d
+  # TODO: WHY we can't also orientate it to SE(3) identity? We use only twists. Twist is the only one for the whole body
+  data: [ 1., 0., 0., 0.,
+          0., 1., 0., 0.,
+          0., 0., 1., 0.,
+          0., 0., 0., 1 ]
+#  data: [0.9984941, -0.0430893, -0.0339555, -0.2383698,
+#         0.0438675, 0.9987841, 0.0225164, -0.0813120,
+#         0.0329440, -0.0239720, 0.9991693, -0.5778016,
+#         0., 0., 0., 1]
+
+#plane noise
+roll_n: 0.01 # 0.01
+pitch_n: 0.01 # 0.01
+zpw_n: 0.05 # 0.05
+
+#Multiple thread support
+multiple_thread: 0
+
+# GPU support
+use_gpu: 0
+use_gpu_acc_flow: 0
+
+#feature traker paprameters
+max_cnt: 150            # max feature number in feature tracking
+min_dist: 30            # min distance between two features
+freq: 10                # frequence (Hz) of publish tracking result. At least 10Hz for good estimation. If set 0, the frequence will be same as raw image
+F_threshold: 1.0        # ransac threshold (pixel)
+show_track: 1           # publish tracking image as topic
+flow_back: 1            # perform forward and backward optical flow to improve feature tracking accuracy
+
+#optimization parameters
+max_solver_time: 0.04  # max solver itration time (ms), to guarantee real time
+max_num_iterations: 8   # max solver itrations, to guarantee real time
+keyframe_parallax: 10.0 # keyframe selection threshold (pixel)
+
+#imu parameters       The more accurate parameters you provide, the better performance
+acc_n: 0.04641977329563476 # 0.04641977329563476         # accelerometer measurement noise standard deviation. #0.2   0.04
+gyr_n: 0.013213877349668923 # 0.013213877349668923        # gyroscope measurement noise standard deviation.     #0.05  0.004
+acc_w: 0.0019703618139556927 # 0.0019703618139556927         # accelerometer bias random work noise standard deviation.  #0.002
+gyr_w: 2.206282069791498e-05 # 2.206282069791498e-05       # gyroscope bias random work noise standard deviation.     #4.0e-5
+g_norm: 9.805 # 9.805 9.81007        # gravity magnitude TODO rely on kalibr?
+
+#wheel parameters
+wheel_gyro_noise_sigma: 0.4 # 0.004 0.003
+wheel_velocity_noise_sigma: 0.01 # 0.01 0.004
+
+estimate_wheel_intrinsic: 0
+sx: 1.0 # 1.0
+sy: 1.0 # 1.0
+sw: 1.0 # 1.0 0.005
+
+
+#unsynchronization parameters
+estimate_td: 0
+td: 0.00
+estimate_td_wheel: 0
+td_wheel: 0.00
+
+#loop closure parameters
+load_previous_pose_graph: 0
+pose_graph_save_path: "/home/wfram/robust_vins_ws/src/Robust-VINS/output/pose_graph"
+save_image: 0
