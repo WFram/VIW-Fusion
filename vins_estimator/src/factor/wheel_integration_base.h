@@ -9,19 +9,19 @@
 
 #pragma once
 
-#include "../utility/utility.h"
-#include "../utility/sophus_utils.hpp"
 #include "../estimator/parameters.h"
+#include "../utility/sophus_utils.hpp"
+#include "../utility/utility.h"
 
 #include <ceres/ceres.h>
 using namespace Eigen;
 
 class WheelIntegrationBase
 {
-  public:
+public:
     WheelIntegrationBase() = delete;
     WheelIntegrationBase(const Eigen::Vector3d &_vel_0, const Eigen::Vector3d &_gyr_0,
-            const double &_linearized_sx, const double &_linearized_sy, const double &_linearized_sw, const double &_linearized_td)
+                         const double &_linearized_sx, const double &_linearized_sy, const double &_linearized_sw, const double &_linearized_td)
         : vel_0{_vel_0}, gyr_0{_gyr_0}, linearized_vel{_vel_0}, linearized_gyr{_gyr_0},
           linearized_sx{_linearized_sx}, linearized_sy{_linearized_sy}, linearized_sw{_linearized_sw}, linearized_td{_linearized_td},
           jacobian{Eigen::Matrix<double, 6, 3>::Zero()}, covariance{Eigen::Matrix<double, 6, 6>::Zero()},
@@ -30,6 +30,19 @@ class WheelIntegrationBase
     {
 
         noise = Eigen::Matrix<double, 12, 12>::Zero();
+        // WF
+        //        double VEL_XY_N_wheel = 0.01;
+        //        double VEL_Z_N_wheel = 0.0005;
+        //        double GYR_XY_N_wheel = 0.0005;
+        //        double GYR_Z_N_wheel = 0.004;
+        //        noise.block<2, 2>(0, 0) = (VEL_XY_N_wheel * VEL_XY_N_wheel) * Eigen::Matrix2d::Identity();
+        //        noise.block<1, 1>(2, 2) = (VEL_Z_N_wheel * VEL_Z_N_wheel) * Eigen::Matrix<double, 1, 1>::Identity();
+        //        noise.block<2, 2>(3, 3) = (GYR_XY_N_wheel * GYR_XY_N_wheel) * Eigen::Matrix2d::Identity();
+        //        noise.block<1, 1>(5, 5) = (GYR_Z_N_wheel * GYR_Z_N_wheel) * Eigen::Matrix<double, 1, 1>::Identity();
+        //        noise.block<2, 2>(6, 6) = (VEL_XY_N_wheel * VEL_XY_N_wheel) * Eigen::Matrix2d::Identity();
+        //        noise.block<1, 1>(8, 8) = (VEL_Z_N_wheel * VEL_Z_N_wheel) * Eigen::Matrix<double, 1, 1>::Identity();
+        //        noise.block<2, 2>(9, 9) = (GYR_XY_N_wheel * GYR_XY_N_wheel) * Eigen::Matrix2d::Identity();
+        //        noise.block<1, 1>(11, 11) = (GYR_Z_N_wheel * GYR_Z_N_wheel) * Eigen::Matrix<double, 1, 1>::Identity();
         noise.block<3, 3>(0, 0) = (VEL_N_wheel * VEL_N_wheel) * Eigen::Matrix3d::Identity();
         noise.block<3, 3>(3, 3) = (GYR_N_wheel * GYR_N_wheel) * Eigen::Matrix3d::Identity();
         noise.block<3, 3>(6, 6) = (VEL_N_wheel * VEL_N_wheel) * Eigen::Matrix3d::Identity();
@@ -44,7 +57,7 @@ class WheelIntegrationBase
         vel_buf.push_back(vel);
         gyr_buf.push_back(gyr);
         propagate(dt, vel, gyr);
-//        checkIntrinsicUpdateJacobian();
+        //        checkIntrinsicUpdateJacobian();
     }
 
     void repropagate(const double &_linearized_sx, const double &_linearized_sy, const double &_linearized_sw)
@@ -54,7 +67,7 @@ class WheelIntegrationBase
         gyr_0 = linearized_gyr;
         delta_p.setZero();
         delta_q.setIdentity();
-//        delta_v.setZero();
+        //        delta_v.setZero();
         linearized_sx = _linearized_sx;
         linearized_sy = _linearized_sy;
         linearized_sw = _linearized_sw;
@@ -84,27 +97,26 @@ class WheelIntegrationBase
         result_delta_p = delta_p + un_vel * _dt;
 
 
-
         result_linearized_sx = linearized_sx;
         result_linearized_sy = linearized_sy;
         result_linearized_sw = linearized_sw;
 
-        if(update_jacobian)
+        if (update_jacobian)
         {
-            Vector3d w_x = 0.5 * (_gyr_0 + _gyr_1)*linearized_sw;
+            Vector3d w_x = 0.5 * (_gyr_0 + _gyr_1) * linearized_sw;
             Vector3d vel_0_x = sv * _vel_0;
             Vector3d vel_1_x = sv * _vel_1;
             Matrix3d R_w_x, R_vel_0_x, R_vel_1_x;
 
-            R_w_x<<0, -w_x(2), w_x(1),
-                w_x(2), 0, -w_x(0),
-                -w_x(1), w_x(0), 0;
+            R_w_x << 0, -w_x(2), w_x(1),
+                    w_x(2), 0, -w_x(0),
+                    -w_x(1), w_x(0), 0;
             R_vel_0_x << 0, -vel_0_x(2), vel_0_x(1),
-                vel_0_x(2), 0, -vel_0_x(0),
-                -vel_0_x(1), vel_0_x(0), 0;
+                    vel_0_x(2), 0, -vel_0_x(0),
+                    -vel_0_x(1), vel_0_x(0), 0;
             R_vel_1_x << 0, -vel_1_x(2), vel_1_x(1),
-                vel_1_x(2), 0, -vel_1_x(0),
-                -vel_1_x(1), vel_1_x(0), 0;
+                    vel_1_x(2), 0, -vel_1_x(0),
+                    -vel_1_x(1), vel_1_x(0), 0;
 
             MatrixXd F = MatrixXd::Zero(6, 6);
             F.block<3, 3>(0, 0) = Matrix3d::Identity();
@@ -114,34 +126,32 @@ class WheelIntegrationBase
             Eigen::Matrix3d Jr;
             Sophus::rightJacobianSO3(un_gyr * _dt, Jr);
 
-            MatrixXd V = MatrixXd::Zero(6,12);
-            V.block<3, 3>(0, 0) =  0.5 * _dt * delta_q.toRotationMatrix() * sv ;
-            V.block<3, 3>(0, 3) =-0.25 * _dt * _dt * result_delta_q.toRotationMatrix() * R_vel_1_x * Jr;
-            V.block<3, 3>(0, 6) =  0.5 * _dt * result_delta_q.toRotationMatrix() * sv;
-            V.block<3, 3>(0, 9) =-0.25 * _dt * _dt * result_delta_q.toRotationMatrix() * R_vel_1_x * Jr ;
-            V.block<3, 3>(3, 3) =  0.5 * Jr * linearized_sw * _dt;
-            V.block<3, 3>(3, 9) =  0.5 * Jr * linearized_sw * _dt;
+            MatrixXd V = MatrixXd::Zero(6, 12);
+            V.block<3, 3>(0, 0) = 0.5 * _dt * delta_q.toRotationMatrix() * sv;
+            V.block<3, 3>(0, 3) = -0.25 * _dt * _dt * result_delta_q.toRotationMatrix() * R_vel_1_x * Jr;
+            V.block<3, 3>(0, 6) = 0.5 * _dt * result_delta_q.toRotationMatrix() * sv;
+            V.block<3, 3>(0, 9) = -0.25 * _dt * _dt * result_delta_q.toRotationMatrix() * R_vel_1_x * Jr;
+            V.block<3, 3>(3, 3) = 0.5 * Jr * linearized_sw * _dt;
+            V.block<3, 3>(3, 9) = 0.5 * Jr * linearized_sw * _dt;
 
-//            step_jacobian = F;
-//            step_V = V;
-            Eigen::Matrix3d I1 = Eigen::Vector3d(1,0,0).asDiagonal();
-            Eigen::Matrix3d I2 = Eigen::Vector3d(0,1,0).asDiagonal();
-//            step_jacobian_ix.block<3,1>(0,0) = 0.5 * delta_q.toRotationMatrix() * (I1* _vel_0 + delta_delta_q.toRotationMatrix() * I1 * _vel_1) * _dt;
-//            step_jacobian_ix.block<3,1>(0,1) = 0.5 * delta_q.toRotationMatrix() * (I2* _vel_0 + delta_delta_q.toRotationMatrix() * I2 * _vel_1) * _dt;
-//            step_jacobian_ix.block<3,1>(3,2) = Jr * 0.5 * (_gyr_0 + _gyr_1) * _dt;
-//            step_jacobian_ix.block<3,1>(0,2) = 0.5 * result_delta_q.toRotationMatrix() * Utility::skewSymmetric(Jr * 0.5 * (_gyr_0 + _gyr_1) * _dt) * sv * _vel_1 * _dt;
+            //            step_jacobian = F;
+            //            step_V = V;
+            Eigen::Matrix3d I1 = Eigen::Vector3d(1, 0, 0).asDiagonal();
+            Eigen::Matrix3d I2 = Eigen::Vector3d(0, 1, 0).asDiagonal();
+            //            step_jacobian_ix.block<3,1>(0,0) = 0.5 * delta_q.toRotationMatrix() * (I1* _vel_0 + delta_delta_q.toRotationMatrix() * I1 * _vel_1) * _dt;
+            //            step_jacobian_ix.block<3,1>(0,1) = 0.5 * delta_q.toRotationMatrix() * (I2* _vel_0 + delta_delta_q.toRotationMatrix() * I2 * _vel_1) * _dt;
+            //            step_jacobian_ix.block<3,1>(3,2) = Jr * 0.5 * (_gyr_0 + _gyr_1) * _dt;
+            //            step_jacobian_ix.block<3,1>(0,2) = 0.5 * result_delta_q.toRotationMatrix() * Utility::skewSymmetric(Jr * 0.5 * (_gyr_0 + _gyr_1) * _dt) * sv * _vel_1 * _dt;
 
-            jacobian.block<3,1>(0,0) = jacobian.block<3,1>(0,0).eval() + 0.5 * (delta_q.toRotationMatrix() * I1 * _vel_0 + result_delta_q.toRotationMatrix() * I1 * _vel_1) * _dt;
-            jacobian.block<3,1>(0,1) = jacobian.block<3,1>(0,1).eval() + 0.5 * (delta_q.toRotationMatrix() * I2 * _vel_0 + result_delta_q.toRotationMatrix() * I2 * _vel_1) * _dt;
-            Eigen::Vector3d dr_dsw_last = jacobian.block<3,1>(3,2);
-            jacobian.block<3,1>(3,2) = jacobian.block<3,1>(3,2).eval() + Jr * 0.5 * (_gyr_0 + _gyr_1) * _dt;
-            jacobian.block<3,1>(0,2) = jacobian.block<3,1>(0,2).eval() + 0.5 * (delta_q.toRotationMatrix()  * Utility::skewSymmetric(dr_dsw_last) * sv * _vel_0
-            + result_delta_q.toRotationMatrix() * Utility::skewSymmetric(jacobian.block<3,1>(3,2)) * sv * _vel_1) * _dt;
+            jacobian.block<3, 1>(0, 0) = jacobian.block<3, 1>(0, 0).eval() + 0.5 * (delta_q.toRotationMatrix() * I1 * _vel_0 + result_delta_q.toRotationMatrix() * I1 * _vel_1) * _dt;
+            jacobian.block<3, 1>(0, 1) = jacobian.block<3, 1>(0, 1).eval() + 0.5 * (delta_q.toRotationMatrix() * I2 * _vel_0 + result_delta_q.toRotationMatrix() * I2 * _vel_1) * _dt;
+            Eigen::Vector3d dr_dsw_last = jacobian.block<3, 1>(3, 2);
+            jacobian.block<3, 1>(3, 2) = jacobian.block<3, 1>(3, 2).eval() + Jr * 0.5 * (_gyr_0 + _gyr_1) * _dt;
+            jacobian.block<3, 1>(0, 2) = jacobian.block<3, 1>(0, 2).eval() + 0.5 * (delta_q.toRotationMatrix() * Utility::skewSymmetric(dr_dsw_last) * sv * _vel_0 + result_delta_q.toRotationMatrix() * Utility::skewSymmetric(jacobian.block<3, 1>(3, 2)) * sv * _vel_1) * _dt;
 
-//            jacobian.setZero();
+            //            jacobian.setZero();
             covariance = F * covariance * F.transpose() + V * noise * V.transpose();//协方差传递
         }
-
     }
 
     void propagate(double _dt, const Eigen::Vector3d &_vel_1, const Eigen::Vector3d &_gyr_1)
@@ -151,29 +161,28 @@ class WheelIntegrationBase
         gyr_1 = _gyr_1;
         Vector3d result_delta_p;
         Quaterniond result_delta_q;
-//        Vector3d result_delta_v;
+        //        Vector3d result_delta_v;
         double result_linearized_sx;
         double result_linearized_sy;
         double result_linearized_sw;
 
-        midPointIntegration(_dt, vel_0, gyr_0, _vel_1, _gyr_1, delta_p, delta_q,linearized_sx, linearized_sy, linearized_sw,
+        midPointIntegration(_dt, vel_0, gyr_0, _vel_1, _gyr_1, delta_p, delta_q, linearized_sx, linearized_sy, linearized_sw,
                             result_delta_p, result_delta_q, result_linearized_sx, result_linearized_sy, result_linearized_sw,
                             1);
 
-//        checkJacobian(_dt, vel_0, gyr_0, vel_1, gyr_1, delta_p, delta_q,
-//                      linearized_sx, linearized_sy, linearized_sw);
+        //        checkJacobian(_dt, vel_0, gyr_0, vel_1, gyr_1, delta_p, delta_q,
+        //                      linearized_sx, linearized_sy, linearized_sw);
 
         delta_p = result_delta_p;
         delta_q = result_delta_q;
-//        delta_v = result_delta_v;
+        //        delta_v = result_delta_v;
         linearized_sx = result_linearized_sx;
         linearized_sy = result_linearized_sy;
         linearized_sw = result_linearized_sw;
         delta_q.normalize();
         sum_dt += dt;
         vel_0 = vel_1;
-        gyr_0 = gyr_1;  
-     
+        gyr_0 = gyr_1;
     }
     //evaulate的参数应该包含所有与该因子相连的节点
     Eigen::Matrix<double, 6, 1> evaluate(const Eigen::Vector3d &Pi, const Eigen::Quaterniond &Qi, const Eigen::Quaterniond &qio, const Eigen::Vector3d &tio, const double sx, const double sy, const double sw,
@@ -184,36 +193,36 @@ class WheelIntegrationBase
         Eigen::Vector3d dp_dsx = jacobian.block<3, 1>(0, 0);
         Eigen::Vector3d dp_dsy = jacobian.block<3, 1>(0, 1);
         Eigen::Vector3d dp_dsw = jacobian.block<3, 1>(0, 2);
-//        Eigen::Vector3d dq_dsx = jacobian.block<3, 1>(3, 0);
-//        Eigen::Vector3d dq_dsy = jacobian.block<3, 1>(3, 1);
+        //        Eigen::Vector3d dq_dsx = jacobian.block<3, 1>(3, 0);
+        //        Eigen::Vector3d dq_dsy = jacobian.block<3, 1>(3, 1);
         Eigen::Vector3d dq_dsw = jacobian.block<3, 1>(3, 2);
 
         double dsx = sx - linearized_sx;
         double dsy = sy - linearized_sy;
         double dsw = sw - linearized_sw;
         Eigen::Matrix3d sv = Eigen::Vector3d(sx, sy, 1).asDiagonal();
-//        ROS_INFO("dsx: %f, dsy: &f, dsw: %f", dsx, dsy, dsw);
+        //        ROS_INFO("dsx: %f, dsy: &f, dsw: %f", dsx, dsy, dsw);
         Eigen::Matrix3d Ri = Qi.toRotationMatrix();
         Eigen::Matrix3d Rj = Qj.toRotationMatrix();
         Eigen::Matrix3d rio = qio.toRotationMatrix();
 
-        corrected_delta_p = delta_p + dp_dsx * dsx + dp_dsy * dsy + dp_dsw * dsw ;
+        corrected_delta_p = delta_p + dp_dsx * dsx + dp_dsy * dsy + dp_dsw * dsw;
         corrected_delta_q = (Sophus::SO3d(delta_q) * Sophus::SO3d::exp(dq_dsw * dsw)).unit_quaternion();
         double dtd = td - linearized_td;
-//        std::cout<<"linearized_td: "<<linearized_td<<" dtd:"<<dtd<<std::endl;
+        //        std::cout<<"linearized_td: "<<linearized_td<<" dtd:"<<dtd<<std::endl;
         Eigen::Quaterniond delta_q_time = (Sophus::SO3d::exp(sw * linearized_gyr * dtd) * Sophus::SO3d(corrected_delta_q) * Sophus::SO3d::exp(-sw * gyr_1 * dtd)).unit_quaternion();
-        Eigen::Vector3d delta_p_time = Sophus::SO3d::exp(sw * linearized_gyr * dtd).matrix() * ( sv * linearized_vel * dtd + corrected_delta_p - corrected_delta_q * sv * vel_1 * dtd);
+        Eigen::Vector3d delta_p_time = Sophus::SO3d::exp(sw * linearized_gyr * dtd).matrix() * (sv * linearized_vel * dtd + corrected_delta_p - corrected_delta_q * sv * vel_1 * dtd);
 
-//        residuals.block<3, 1>(O_P, 0) = (Ri * rio).transpose() * (Rj * tio + Pj - Ri * tio - Pi) - corrected_delta_p;
-//        residuals.block<3, 1>(O_R, 0) =  Sophus::SO3d( corrected_delta_q.inverse() * (Qi * qio).inverse() * Qj * qio).log();
+        //        residuals.block<3, 1>(O_P, 0) = (Ri * rio).transpose() * (Rj * tio + Pj - Ri * tio - Pi) - corrected_delta_p;
+        //        residuals.block<3, 1>(O_R, 0) =  Sophus::SO3d( corrected_delta_q.inverse() * (Qi * qio).inverse() * Qj * qio).log();
 
         residuals.block<3, 1>(O_P, 0) = (Ri * rio).transpose() * (Rj * tio + Pj - Ri * tio - Pi) - delta_p_time;
-        residuals.block<3, 1>(O_R, 0) =  Sophus::SO3d( delta_q_time.inverse() * (Qi * qio).inverse() * Qj * qio).log();
-//        std::cout<<"wheel residuals: "<<residuals.transpose()<<std::endl;
+        residuals.block<3, 1>(O_R, 0) = Sophus::SO3d(delta_q_time.inverse() * (Qi * qio).inverse() * Qj * qio).log();
+        //        std::cout<<"wheel residuals: "<<residuals.transpose()<<std::endl;
 
 
-//        residuals.block<3, 1>(O_BA, 0) = Baj - Bai;
-//        residuals.block<3, 1>(O_BG, 0) = Bgj - Bgi;
+        //        residuals.block<3, 1>(O_BA, 0) = Baj - Bai;
+        //        residuals.block<3, 1>(O_BG, 0) = Bgj - Bgi;
         return residuals;
     }
 
@@ -241,5 +250,4 @@ class WheelIntegrationBase
     std::vector<double> dt_buf;
     std::vector<Eigen::Vector3d> vel_buf;
     std::vector<Eigen::Vector3d> gyr_buf;
-
 };

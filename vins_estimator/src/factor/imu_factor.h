@@ -8,28 +8,29 @@
  *******************************************************/
 
 #pragma once
-#include <ros/assert.h>
-#include <iostream>
 #include <eigen3/Eigen/Dense>
+#include <iostream>
+#include <ros/assert.h>
 
-#include "../utility/utility.h"
 #include "../estimator/parameters.h"
+#include "../utility/utility.h"
 #include "integration_base.h"
 
+#include "pose_local_parameterization.h"
 #include <ceres/ceres.h>
 #include <ceres/gradient_checker.h>
-#include "pose_local_parameterization.h"
 
-class IMUFactor : public ceres::SizedCostFunction<15, 7, 9, 7, 9>
+class IMUFactor : public ceres::SizedCostFunction<15, 7, 9, 7, 9>// TODO ???
 {
-  public:
+public:
     IMUFactor() = delete;
-    IMUFactor(IntegrationBase* _pre_integration): pre_integration(_pre_integration)
+    IMUFactor(IntegrationBase *_pre_integration) : pre_integration(_pre_integration)
     {
     }
     virtual bool Evaluate(double const *const *parameters, double *residuals, double **jacobians) const
     {
 
+        // Such a numeration is defined by the order which is in use when calling a function AddResidualBlock() with the factor
         Eigen::Vector3d Pi(parameters[0][0], parameters[0][1], parameters[0][2]);
         Eigen::Quaterniond Qi(parameters[0][6], parameters[0][3], parameters[0][4], parameters[0][5]);
 
@@ -44,21 +45,21 @@ class IMUFactor : public ceres::SizedCostFunction<15, 7, 9, 7, 9>
         Eigen::Vector3d Baj(parameters[3][3], parameters[3][4], parameters[3][5]);
         Eigen::Vector3d Bgj(parameters[3][6], parameters[3][7], parameters[3][8]);
 
-//Eigen::Matrix<double, 15, 15> Fd;
-//Eigen::Matrix<double, 15, 12> Gd;
+        //Eigen::Matrix<double, 15, 15> Fd;
+        //Eigen::Matrix<double, 15, 12> Gd;
 
-//Eigen::Vector3d pPj = Pi + Vi * sum_t - 0.5 * g * sum_t * sum_t + corrected_delta_p;
-//Eigen::Quaterniond pQj = Qi * delta_q;
-//Eigen::Vector3d pVj = Vi - g * sum_t + corrected_delta_v;
-//Eigen::Vector3d pBaj = Bai;
-//Eigen::Vector3d pBgj = Bgi;
+        //Eigen::Vector3d pPj = Pi + Vi * sum_t - 0.5 * g * sum_t * sum_t + corrected_delta_p;
+        //Eigen::Quaterniond pQj = Qi * delta_q;
+        //Eigen::Vector3d pVj = Vi - g * sum_t + corrected_delta_v;
+        //Eigen::Vector3d pBaj = Bai;
+        //Eigen::Vector3d pBgj = Bgi;
 
-//Vi + Qi * delta_v - g * sum_dt = Vj;
-//Qi * delta_q = Qj;
+        //Vi + Qi * delta_v - g * sum_dt = Vj;
+        //Qi * delta_q = Qj;
 
-//delta_p = Qi.inverse() * (0.5 * g * sum_dt * sum_dt + Pj - Pi);
-//delta_v = Qi.inverse() * (g * sum_dt + Vj - Vi);
-//delta_q = Qi.inverse() * Qj;
+        //delta_p = Qi.inverse() * (0.5 * g * sum_dt * sum_dt + Pj - Pi);
+        //delta_v = Qi.inverse() * (g * sum_dt + Vj - Vi);
+        //delta_q = Qi.inverse() * Qj;
 
 #if 0
         if ((Bai - pre_integration->linearized_ba).norm() > 0.10 ||
@@ -68,13 +69,14 @@ class IMUFactor : public ceres::SizedCostFunction<15, 7, 9, 7, 9>
         }
 #endif
 
+        // Seems like here we just create an empty object (despite we pass a pointer) and call evaluate() function to be already written
         Eigen::Map<Eigen::Matrix<double, 15, 1>> residual(residuals);
         residual = pre_integration->evaluate(Pi, Qi, Vi, Bai, Bgi,
-                                            Pj, Qj, Vj, Baj, Bgj);
+                                             Pj, Qj, Vj, Baj, Bgj);
 
         Eigen::Matrix<double, 15, 15> sqrt_info = Eigen::LLT<Eigen::Matrix<double, 15, 15>>(pre_integration->covariance.inverse()).matrixL().transpose();
         //sqrt_info.setIdentity();
-//        std::cout<<"sqrt_info :\n"<<sqrt_info<<std::endl;
+        //        std::cout<<"sqrt_info :\n"<<sqrt_info<<std::endl;
 
         residual = sqrt_info * residual;
 
@@ -93,7 +95,7 @@ class IMUFactor : public ceres::SizedCostFunction<15, 7, 9, 7, 9>
             {
                 ROS_WARN("numerical unstable in preintegration");
                 //std::cout << pre_integration->jacobian << std::endl;
-///                ROS_BREAK();
+                ///                ROS_BREAK();
             }
 
             if (jacobians[0])
@@ -196,7 +198,5 @@ class IMUFactor : public ceres::SizedCostFunction<15, 7, 9, 7, 9>
     //void checkCorrection();
     //void checkTransition();
     //void checkJacobian(double **parameters);
-    IntegrationBase* pre_integration;
-
+    IntegrationBase *pre_integration;
 };
-
